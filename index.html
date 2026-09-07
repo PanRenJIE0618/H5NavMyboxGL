@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0B2C4A" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>现场定位 · MyBoxGL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=ZCOOL+XiaoWei&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://iclient.supermap.io/web/libs/mapbox-gl-js/1.13.2/mapbox-gl.css"
+    />
+    <link rel="stylesheet" href="/libs/mapboxgl/iclient-mapboxgl.min.css" />
+    <style>
+      .wx-boot {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        padding: 28px 18px;
+        background: #0b2c4a;
+        color: #d7e4ea;
+        font-family: 'Noto Sans SC', 'PingFang SC', sans-serif;
+      }
+      .wx-boot.is-on {
+        display: block;
+      }
+      .wx-boot h1 {
+        margin: 0 0 12px;
+        font-size: 24px;
+        font-weight: 500;
+      }
+      .wx-boot p {
+        margin: 0 0 12px;
+        line-height: 1.6;
+        color: #b7c6cd;
+      }
+      .wx-boot code {
+        display: block;
+        margin-top: 12px;
+        padding: 12px;
+        background: #12364f;
+        color: #7fe3e0;
+        word-break: break-all;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wx-boot" class="wx-boot">
+      <h1>请用浏览器打开</h1>
+      <p>当前地址无法在微信内可靠使用（本机/局域网或非安全上下文）。</p>
+      <p>请点右上角 <strong>···</strong> → <strong>在浏览器中打开</strong>。推荐系统浏览器或百度浏览器。</p>
+      <code id="wx-boot-url"></code>
+    </div>
+    <div id="app"></div>
+    <script>
+      ;(function () {
+        var ua = navigator.userAgent || ''
+        if (!/MicroMessenger/i.test(ua)) return
+        var host = location.hostname || ''
+        var isLocalHost = host === 'localhost' || host === '127.0.0.1'
+        var isLanIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(host)
+        // 正式域名 + HTTPS 可信证书：允许微信内打开；仅拦截本机/局域网调试地址
+        if (!isLocalHost && !isLanIp && window.isSecureContext) return
+        var boot = document.getElementById('wx-boot')
+        var url = document.getElementById('wx-boot-url')
+        if (boot) boot.classList.add('is-on')
+        if (url) url.textContent = location.href
+      })()
+    </script>
+    <script src="https://iclient.supermap.io/web/libs/mapbox-gl-js/1.13.2/mapbox-gl.js"></script>
+    <script src="/libs/mapboxgl/iclient-mapboxgl-es6.min.js"></script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
