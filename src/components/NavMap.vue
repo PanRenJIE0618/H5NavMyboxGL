@@ -13,6 +13,15 @@ import {
   onBehaviorPolicyChange,
 } from '../config'
 import { basemapTileUrls, getStoredBasemap, onBasemapChange } from '../lib/basemap'
+import { getStoredUiTheme, onUiThemeChange } from '../lib/uiTheme'
+import { getAutoViewLock, onAutoViewLockChange } from '../lib/viewLock'
+import {
+  getDefaultDriveStyle,
+  getDefaultTravelMode,
+  getVoiceEnabled,
+  onNavPrefsChange,
+  setVoiceEnabled,
+} from '../lib/navPrefs'
 import { LocationBeacon } from '../lib/LocationBeacon'
 import { createDeviceWalkBehavior } from '../lib/deviceWalkBehavior'
 import { createOffRouteMonitor } from '../lib/offRouteMonitor'
@@ -33,6 +42,9 @@ import {
   loadNavSession,
   saveNavSession,
 } from '../lib/navSession'
+import {
+  pushNavHistory,
+} from '../lib/navHistory'
 import { formatDistance, formatDuration, haversineMeters } from '../lib/geo'
 import { reverseGeocode } from '../lib/geocode'
 import { normalizeHeading, shortestDelta, unwrapHeading } from '../lib/heading'
@@ -52,7 +64,7 @@ const props = defineProps({
   /** 页面是否处于前台展示（从设置返回时触发地图 resize） */
   active: { type: Boolean, default: true },
 })
-const emit = defineEmits(['open-settings'])
+const emit = defineEmits(['navigating-change'])
 
 function toggleDebugConsole() {
   debugConsoleOpen.value = !debugConsoleOpen.value
@@ -73,8 +85,8 @@ const searching = ref(false)
 const searchError = ref('')
 const places = ref([])
 const destination = ref(null)
-const travelMode = ref('drive')
-const driveStyle = ref('0')
+const travelMode = ref(getDefaultTravelMode())
+const driveStyle = ref(getDefaultTravelMode() === 'walk' ? 'walk' : getDefaultDriveStyle())
 const routeInfo = ref(null)
 const routePlans = ref({})
 const routesReady = ref(false)
@@ -82,8 +94,8 @@ const routing = ref(false)
 const navigating = ref(false)
 /** 选点 / 看路线时锁定相机，避免 GPS 跟随把目的地标和路线拽出视野 */
 const routePreviewLock = ref(false)
-/** 视角跟随：相机中心始终压在当前位置正上方（与朝向无关）；默认见行为策略 */
-const followUser = ref(getBehaviorPolicy().followUserOnInit)
+/** 视角跟随：相机中心始终压在当前位置正上方（与朝向无关）；由「我的 · 自动视角锁定」控制 */
+const followUser = ref(getAutoViewLock() && getBehaviorPolicy().followUserOnInit)
 const arrived = ref(false)
 const remainingMeters = ref(null)
 const remainingSeconds = ref(null)
@@ -91,9 +103,11 @@ const nextGuide = ref('')
 const offRoute = ref(false)
 const offRouteDistanceMeters = ref(null)
 const rerouting = ref(false)
-const voiceMuted = ref(isNavVoiceMuted())
+const voiceMuted = ref(!getVoiceEnabled())
 /** 冷启动待确认的导航会话 */
 const pendingResume = ref(null)
+/** @type {null | object} */
+let activeNavMeta = null
 
 /** 高德风格：选中蓝线 + 白边；备选淡蓝 */
 const ROUTE_COLOR_ACTIVE = '#3370FF'
@@ -187,6 +201,9 @@ let lastSessionSaveRemainMeters = null
 let pageHiddenAt = 0
 let visibilityBound = false
 let unsubBasemap = null
+let unsubUiTheme = null
+let unsubAutoViewLock = null
+let unsubNavPrefs = null
 
 const offRouteMonitor = createOffRouteMonitor(() => getBehaviorPolicy(), {
   // 后续联调：返回后端重规划结果即可替换本地 planByTravelMode
@@ -233,10 +250,15 @@ function scheduleResumeAfterDragIdle() {
 }
 
 function enableViewLockAfterDragIdle() {
-  // 选点/看路线预览时不抢相机；导航中或普通浏览则自动视角锁定
+  // 选点/看路线预览时不抢相机；导航中或普通浏览则按设置自动视角锁定
   if (routePreviewLock.value && !navigating.value) return
 
   locationTickPaused = false
+  if (!getAutoViewLock()) {
+    applyHeadingDragLock()
+    return
+  }
+
   followUser.value = true
   if (navigating.value) {
     headingTestLock.value = getBehaviorPolicy().headingLockOnNavStart
@@ -285,14 +307,21 @@ function syncOverlayClearance() {
   if (!stage) return
   const stageRect = stage.getBoundingClientRect()
   const mastRect = mastEl.value?.getBoundingClientRect?.()
-  const hudRect = hudEl.value?.getBoundingClientRect?.()
+  const hudNode = hudEl.value
+  const hudHidden =
+    !hudNode ||
+    hudNode.style.display === 'none' ||
+    (typeof getComputedStyle === 'function' && getComputedStyle(hudNode).display === 'none')
+  const hudRect = hudHidden ? null : hudNode.getBoundingClientRect?.()
 
   const mastClear = mastRect
     ? Math.max(72, Math.ceil(mastRect.bottom - stageRect.top) + 10)
     : 120
-  const hudClear = hudRect
-    ? Math.max(96, Math.ceil(stageRect.bottom - hudRect.top) + 12)
-    : 140
+  const tabPad = Number.parseFloat(getComputedStyle(stage).getPropertyValue('--tab-clearance')) || 0
+  const hudClear =
+    hudRect && hudRect.height > 2
+      ? Math.max(96, Math.ceil(stageRect.bottom - hudRect.top) + 12)
+      : Math.max(72, Math.ceil(tabPad) + 20)
 
   stage.style.setProperty('--mast-clearance', `${mastClear}px`)
   stage.style.setProperty('--hud-clearance', `${hudClear}px`)
@@ -570,6 +599,11 @@ const hudTitle = computed(() => {
   return address.value || (loading.value ? '地址解析中' : '尚未获取地址')
 })
 
+/** 搜索结果展开时隐藏底部地址卡，避免与顶部结果列表重叠 */
+const showSearchPanel = computed(
+  () => places.value.length > 0 || Boolean(searchError.value && !destination.value),
+)
+
 const routeSummary = computed(() => {
   if (!routeInfo.value) return ''
   const mode = `${travelModeLabel(routeInfo.value.mode || travelMode.value)} · ${
@@ -577,15 +611,23 @@ const routeSummary = computed(() => {
       ? '步行路线'
       : driveStyleLabel(routeInfo.value.style)
   }`
-  if (navigating.value && remainingMeters.value != null) {
-    const distance = formatDistance(remainingMeters.value)
-    const duration = formatDuration(remainingSeconds.value ?? estimateRemainingSeconds(remainingMeters.value))
-    return [mode, `剩余 ${distance}`, duration].filter(Boolean).join(' · ')
-  }
+  // 导航中剩余里程/时间已在顶部 status 展示，此处不再重复
+  if (navigating.value) return mode
   const distance = formatDistance(routeInfo.value.distanceMeters)
   const duration = formatDuration(routeInfo.value.durationSeconds)
   return [mode, distance, duration].filter(Boolean).join(' · ')
 })
+
+/** 剩余路程占比 0~1（越接近目的地越小，蓝条越短） */
+const navRemainRatio = computed(() => {
+  if (!navigating.value) return 0
+  const total = Number(routeInfo.value?.distanceMeters) || 0
+  const remain = Number(remainingMeters.value)
+  if (!(total > 0) || !Number.isFinite(remain)) return 1
+  return Math.min(1, Math.max(0, Math.max(0, remain) / total))
+})
+
+const navRemainPercent = computed(() => Math.round(navRemainRatio.value * 100))
 
 function estimateRemainingSeconds(meters) {
   const plan = routeInfo.value
@@ -745,6 +787,52 @@ function applyBasemapToMap(id) {
   const { baseTiles, labelTiles } = basemapTileUrls(id)
   replaceRasterTiles('tdt-vec', baseTiles)
   replaceRasterTiles('tdt-cva', labelTiles)
+  applyMapThemeStyle(getStoredUiTheme())
+}
+
+/** 深色主题：矢量/注记栅格反色，得到暗色电子底图（不影响路线等矢量图层） */
+function applyMapThemeStyle(theme) {
+  if (!map) return
+  const dark = theme === 'dark'
+  const basemapId = getStoredBasemap()
+  /** @type {Record<string, number>} */
+  let paint
+  if (dark && basemapId === 'vec') {
+    paint = {
+      'raster-hue-rotate': 180,
+      'raster-brightness-min': 1,
+      'raster-brightness-max': 0,
+      'raster-saturation': 0,
+      'raster-contrast': 0,
+    }
+  } else if (dark) {
+    // 影像 / 地形：轻微压暗，避免反色失真
+    paint = {
+      'raster-hue-rotate': 0,
+      'raster-brightness-min': 0,
+      'raster-brightness-max': 0.55,
+      'raster-saturation': -0.15,
+      'raster-contrast': 0.05,
+    }
+  } else {
+    paint = {
+      'raster-hue-rotate': 0,
+      'raster-brightness-min': 0,
+      'raster-brightness-max': 1,
+      'raster-saturation': 0,
+      'raster-contrast': 0,
+    }
+  }
+  for (const layerId of ['tdt-vec-layer', 'tdt-cva-layer']) {
+    if (!map.getLayer?.(layerId)) continue
+    try {
+      for (const [key, value] of Object.entries(paint)) {
+        map.setPaintProperty(layerId, key, value)
+      }
+    } catch {
+      // ignore
+    }
+  }
 }
 
 async function initMap() {
@@ -827,6 +915,7 @@ async function initMap() {
     map.on('pitchend', syncPitch3DFromMap)
 
     mapReady.value = true
+    applyMapThemeStyle(getStoredUiTheme())
     resizeObserver = new ResizeObserver(() => onMapContainerResize())
     resizeObserver.observe(mapEl.value)
     if (window.visualViewport) {
@@ -841,7 +930,7 @@ async function initMap() {
 }
 
 function onMapDragStart() {
-  // 用户拖地图后关闭视角跟随与朝向锁定（可再点按钮重新开启）
+  // 用户拖地图后关闭视角跟随与朝向锁定（自动锁定开启时，停拖后会再开）
   followUser.value = false
   headingTestLock.value = false
   pinUntil = 0
@@ -856,8 +945,8 @@ function onMapDragEnd() {
   scheduleResumeAfterDragIdle()
 }
 
-function toggleFollowView() {
-  followUser.value = !followUser.value
+function setFollowUser(enabled) {
+  followUser.value = Boolean(enabled)
   if (followUser.value) {
     routePreviewLock.value = false
     clearLocationResumeTimer()
@@ -873,6 +962,17 @@ function toggleFollowView() {
       )
     }
   }
+  applyHeadingDragLock()
+}
+
+function onAutoViewLockPrefChange(enabled) {
+  if (enabled) {
+    if (routePreviewLock.value && !navigating.value) return
+    setFollowUser(true)
+    return
+  }
+  clearLocationResumeTimer()
+  followUser.value = false
   applyHeadingDragLock()
 }
 
@@ -1296,6 +1396,60 @@ function closeSearchPanel() {
   if (!destination.value) searchError.value = ''
 }
 
+function beginNavHistoryMeta() {
+  if (!destination.value || !routeInfo.value) {
+    activeNavMeta = null
+    return
+  }
+  activeNavMeta = {
+    id: `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    startedAt: Date.now(),
+    destination: {
+      name: destination.value.name || '目的地',
+      lng: Number(destination.value.lng),
+      lat: Number(destination.value.lat),
+      address: destination.value.address || '',
+    },
+    travelMode: travelMode.value === 'walk' ? 'walk' : 'drive',
+    driveStyle: String(driveStyle.value || (travelMode.value === 'walk' ? 'walk' : '0')),
+    distanceMeters: Number(routeInfo.value.distanceMeters) || 0,
+    durationSeconds: Number(routeInfo.value.durationSeconds) || 0,
+  }
+}
+
+function commitNavHistory(opts = {}) {
+  if (!activeNavMeta || opts.keepSession) {
+    if (!opts.keepSession) activeNavMeta = null
+    return
+  }
+  const record = {
+    ...activeNavMeta,
+    endedAt: Date.now(),
+    arrived: Boolean(opts.announceArrive),
+    distanceMeters: Number(routeInfo.value?.distanceMeters) || activeNavMeta.distanceMeters,
+    durationSeconds: Number(routeInfo.value?.durationSeconds) || activeNavMeta.durationSeconds,
+    travelMode: travelMode.value === 'walk' ? 'walk' : activeNavMeta.travelMode,
+    driveStyle: String(driveStyle.value || activeNavMeta.driveStyle),
+  }
+  pushNavHistory(record)
+  activeNavMeta = null
+}
+
+async function applyHistoryItem(item) {
+  if (!item?.destination) return
+  keyword.value = item.destination.name || ''
+  if (item.travelMode === 'walk' || item.travelMode === 'drive') {
+    travelMode.value = item.travelMode
+  }
+  if (item.driveStyle) driveStyle.value = String(item.driveStyle)
+  await selectPlace({
+    name: item.destination.name,
+    lng: item.destination.lng,
+    lat: item.destination.lat,
+    address: item.destination.address || '',
+  })
+}
+
 async function selectPlace(place) {
   if (place.suggest) {
     keyword.value = place.name
@@ -1486,7 +1640,7 @@ async function setTravelMode(mode) {
   routesReady.value = false
   routePlans.value = {}
   routeInfo.value = null
-  driveStyle.value = mode === 'walk' ? 'walk' : '0'
+  driveStyle.value = mode === 'walk' ? 'walk' : getDefaultDriveStyle()
   clearAllRouteLines()
   if (destination.value) {
     await prepareDualRoutes({ previewDual: mode === 'drive' })
@@ -1515,9 +1669,9 @@ async function startNavigation() {
   walkHeadingBehavior.reset('navigating')
   walkHeadingActive.value = false
   routePreviewLock.value = false
-  // 导航默认开关见行为策略
+  // 导航默认开关见行为策略；视角跟随受「自动视角锁定」约束
   const policy = getBehaviorPolicy()
-  followUser.value = policy.followUserOnNavStart
+  followUser.value = getAutoViewLock() && policy.followUserOnNavStart
   headingTestLock.value = policy.headingLockOnNavStart
   clearSettleTimers()
   pinUntil = 0
@@ -1563,12 +1717,14 @@ async function startNavigation() {
 
   persistNavSession(true)
   pendingResume.value = null
+  beginNavHistoryMeta()
 
   try {
     await watchLocation(onLocationTick)
   } catch (err) {
     navigating.value = false
     clearNavSession()
+    activeNavMeta = null
     stopNavVoice()
     locatingHint.value = err?.message || '无法持续定位，导航已取消'
   }
@@ -1741,7 +1897,7 @@ async function confirmResumeSession() {
       ? routeInfo.value.durationSeconds
       : Number(session.remainingSeconds)
   nextGuide.value = session.nextGuide || routeInfo.value.guides?.[0]?.text || ''
-  followUser.value = session.followUser !== false
+  followUser.value = getAutoViewLock() && session.followUser !== false
   headingTestLock.value = session.headingTestLock !== false
   routePreviewLock.value = false
   arrived.value = false
@@ -1757,6 +1913,7 @@ async function confirmResumeSession() {
   offRouteMonitor.start()
   applyHeadingDragLock()
   persistNavSession(true)
+  beginNavHistoryMeta()
 
   const ok = await rebindNavRuntime({ hint: false })
   locatingHint.value = ok ? '已继续导航' : locatingHint.value || '导航已恢复，定位待重试'
@@ -1766,7 +1923,9 @@ async function confirmResumeSession() {
 }
 
 function stopNavigation(opts = {}) {
+  const wasNavigating = navigating.value
   navigating.value = false
+  if (wasNavigating) commitNavHistory(opts)
   if (!opts.keepSession) {
     clearNavSession()
     lastSessionSaveAt = 0
@@ -1784,9 +1943,9 @@ function stopNavigation(opts = {}) {
   } else {
     stopNavVoice()
   }
-  // 结束导航后恢复为策略默认开关
+  // 结束导航后恢复为策略默认开关（视角跟随仍受自动锁定设置约束）
   const policy = getBehaviorPolicy()
-  followUser.value = policy.followUserOnInit
+  followUser.value = getAutoViewLock() && policy.followUserOnInit
   headingTestLock.value = policy.headingLockOnInit
   try {
     map?.dragPan?.enable?.()
@@ -1871,11 +2030,20 @@ function toggleVoiceMute() {
   if (voiceMuted.value) {
     unlockNavVoice({ primingText: '语音已开启' })
   }
-  voiceMuted.value = toggleNavVoiceMuted()
+  const nextMuted = toggleNavVoiceMuted()
+  voiceMuted.value = nextMuted
+  setVoiceEnabled(!nextMuted)
   locatingHint.value = voiceMuted.value ? '语音播报已关闭' : '语音播报已开启'
   window.setTimeout(() => {
     if (locatingHint.value.startsWith('语音播报')) locatingHint.value = ''
   }, 1600)
+}
+
+function applyNavPrefs(next) {
+  voiceMuted.value = !next.voiceEnabled
+  if (navigating.value || routesReady.value || routing.value) return
+  travelMode.value = next.travelMode
+  driveStyle.value = next.travelMode === 'walk' ? 'walk' : next.driveStyle
 }
 
 async function onRerouteClick() {
@@ -1933,6 +2101,12 @@ async function rerouteAfterYaw(current) {
     offRouteDistanceMeters.value = null
     offRouteMonitor.reset('rerouted')
     persistNavSession(true)
+    if (activeNavMeta) {
+      activeNavMeta.distanceMeters = Number(planned.distanceMeters) || activeNavMeta.distanceMeters
+      activeNavMeta.durationSeconds = Number(planned.durationSeconds) || activeNavMeta.durationSeconds
+      activeNavMeta.driveStyle = String(driveStyle.value || activeNavMeta.driveStyle)
+      activeNavMeta.travelMode = travelMode.value === 'walk' ? 'walk' : 'drive'
+    }
   } catch (err) {
     nextGuide.value = err.message || '重新规划失败，请靠近原路线'
     speakNav(nextGuide.value, { interrupt: true, dedupeMs: 0 })
@@ -2243,7 +2417,7 @@ function clearDestination() {
   routePlans.value = {}
   routesReady.value = false
   routePreviewLock.value = false
-  driveStyle.value = travelMode.value === 'walk' ? 'walk' : '0'
+  driveStyle.value = travelMode.value === 'walk' ? 'walk' : getDefaultDriveStyle()
   arrived.value = false
   remainingMeters.value = null
   remainingSeconds.value = null
@@ -2257,6 +2431,7 @@ function clearDestination() {
 
 watch(
   () => [
+    showSearchPanel.value,
     places.value.length,
     searchError.value,
     destination.value,
@@ -2300,13 +2475,25 @@ watch(nextGuide, (text, prev) => {
   speakNav(text)
 })
 
+watch(navigating, (value) => {
+  emit('navigating-change', Boolean(value))
+  nextTick(() => {
+    syncOverlayClearance()
+    refreshMapSize()
+  })
+})
+
+defineExpose({
+  applyHistoryItem,
+})
+
 watch(
   () => props.active,
   (visible) => {
     if (!visible || !mapReady.value) return
     requestAnimationFrame(() => {
-      refreshMapSize()
       syncOverlayClearance()
+      refreshMapSize()
     })
   },
 )
@@ -2321,6 +2508,15 @@ onMounted(() => {
   unsubBasemap = onBasemapChange((id) => {
     applyBasemapToMap(id)
   })
+  unsubUiTheme = onUiThemeChange((theme) => {
+    applyMapThemeStyle(theme)
+  })
+  unsubAutoViewLock = onAutoViewLockChange((enabled) => {
+    onAutoViewLockPrefChange(enabled)
+  })
+  unsubNavPrefs = onNavPrefsChange((next) => {
+    applyNavPrefs(next)
+  })
   initMap()
   requestAnimationFrame(() => bindOverlayObservers())
 })
@@ -2328,6 +2524,12 @@ onMounted(() => {
 onUnmounted(() => {
   unsubBasemap?.()
   unsubBasemap = null
+  unsubUiTheme?.()
+  unsubUiTheme = null
+  unsubAutoViewLock?.()
+  unsubAutoViewLock = null
+  unsubNavPrefs?.()
+  unsubNavPrefs = null
   unbindPageLifecycle()
   // 保留 sessionStorage 快照，供刷新 / 被杀后「继续导航」
   stopNavigation({ keepSession: true })
@@ -2433,13 +2635,13 @@ onUnmounted(() => {
             type="search"
             enterkeyhint="search"
             placeholder="搜索地址或地点"
-            :disabled="!mapReady"
+            :disabled="!mapReady || navigating"
           />
-          <button class="search__btn" type="submit" :disabled="!mapReady || searching">
+          <button class="search__btn" type="submit" :disabled="!mapReady || searching || navigating">
             {{ searching ? '搜索中' : '搜索' }}
           </button>
         </form>
-        <div v-if="places.length || (searchError && !destination)" class="search-panel">
+        <div v-if="showSearchPanel" class="search-panel">
           <div class="search-panel__bar">
             <span>{{ searchError ? '搜索提示' : `找到 ${places.length} 条结果` }}</span>
             <button class="search-panel__close" type="button" @click="closeSearchPanel">关闭</button>
@@ -2522,14 +2724,35 @@ onUnmounted(() => {
         <span class="map-speed__unit">km/h</span>
         <span v-if="isSpeeding" class="map-speed__tag">超速</span>
       </div>
-      <div v-if="mapReady" class="map-travel" role="group" aria-label="出行方式">
+      <div
+        v-if="mapReady && navigating"
+        class="nav-progress"
+        role="progressbar"
+        :aria-valuenow="navRemainPercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-label="`剩余路程 ${navRemainPercent}%`"
+      >
+        <div class="nav-progress__rail">
+          <div
+            class="nav-progress__bar"
+            :style="{ height: `${navRemainPercent}%` }"
+          />
+        </div>
+      </div>
+      <div
+        v-if="mapReady && !navigating"
+        class="map-travel"
+        role="group"
+        aria-label="出行方式"
+      >
         <button
           v-for="item in TRAVEL_MODES"
           :key="item.id"
           class="map-travel__btn"
           type="button"
           :class="{ 'is-active': travelMode === item.id }"
-          :disabled="navigating || routing"
+          :disabled="routing"
           @click="setTravelMode(item.id)"
         >
           {{ item.label }}
@@ -2546,29 +2769,6 @@ onUnmounted(() => {
           @click="toggleVoiceMute"
         >
           <span class="map-voice__label">{{ voiceMuted ? '静音' : '语音' }}</span>
-        </button>
-        <button
-          class="map-fab map-settings"
-          type="button"
-          aria-label="地图设置"
-          title="设置"
-          @click="emit('open-settings')"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-            />
-            <path
-              d="M19.4 13.1v-2.2l-1.7-.3a6.4 6.4 0 0 0-.5-1.2l1-1.4-1.6-1.6-1.4 1a6.4 6.4 0 0 0-1.2-.5L13.1 4.6h-2.2l-.3 1.7a6.4 6.4 0 0 0-1.2.5l-1.4-1-1.6 1.6 1 1.4a6.4 6.4 0 0 0-.5 1.2l-1.7.3v2.2l1.7.3c.12.42.29.82.5 1.2l-1 1.4 1.6 1.6 1.4-1c.38.21.78.38 1.2.5l.3 1.7h2.2l.3-1.7c.42-.12.82-.29 1.2-.5l1.4 1 1.6-1.6-1-1.4c.21-.38.38-.78.5-1.2l1.7-.3Z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linejoin="round"
-            />
-          </svg>
         </button>
         <button
           class="map-fab map-heading-test"
@@ -2590,36 +2790,6 @@ onUnmounted(() => {
               d="M12 7.2 L15.6 16.2 L12 14.2 L8.4 16.2 Z"
               fill="currentColor"
             />
-          </svg>
-        </button>
-        <button
-          class="map-follow"
-          type="button"
-          :class="{ 'is-active': followUser }"
-          :disabled="lng == null"
-          :aria-label="followUser ? '关闭视角跟随' : '开启视角跟随'"
-          :title="followUser ? '关闭视角跟随' : '视角跟随'"
-          @click="toggleFollowView"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M8 11V8.8a4 4 0 0 1 8 0V11"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-            <rect
-              x="6.2"
-              y="11"
-              width="11.6"
-              height="9"
-              rx="2"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-            />
-            <circle cx="12" cy="15.4" r="1.35" fill="currentColor" />
           </svg>
         </button>
         <button
@@ -2665,7 +2835,12 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <section ref="hudEl" class="hud" aria-live="polite">
+    <section
+      v-show="!showSearchPanel"
+      ref="hudEl"
+      class="hud"
+      aria-live="polite"
+    >
       <p v-if="statusText" class="hud__status">
         <span class="hud__dot" :class="{ 'is-live': watching || (lng != null && !loading) }" />
         {{ statusText }}

@@ -10,9 +10,12 @@ export const UI_THEMES = Object.freeze(['light', 'dark', 'contrast'])
 
 export const UI_THEME_OPTIONS = Object.freeze([
   { id: 'light', label: '浅色', desc: '白底面板，默认风格' },
-  { id: 'dark', label: '深色', desc: '深色面板，夜间更护眼' },
+  { id: 'dark', label: '深色', desc: '深色面板，夜间更护眼；矢量底图同步暗色' },
   { id: 'contrast', label: '高对比', desc: '黑白强化，户外更清晰' },
 ])
+
+/** @type {Set<(theme: 'light' | 'dark' | 'contrast') => void>} */
+const listeners = new Set()
 
 /**
  * @param {unknown} value
@@ -29,6 +32,19 @@ export function getStoredUiTheme() {
   } catch {
     return 'light'
   }
+}
+
+/**
+ * @param {'light' | 'dark' | 'contrast'} theme
+ */
+function notifyUiTheme(theme) {
+  listeners.forEach((fn) => {
+    try {
+      fn(theme)
+    } catch {
+      // ignore
+    }
+  })
 }
 
 /**
@@ -54,7 +70,18 @@ export function setUiTheme(theme) {
   } catch {
     // ignore
   }
+  notifyUiTheme(id)
   return id
+}
+
+/**
+ * @param {(theme: 'light' | 'dark' | 'contrast') => void} fn
+ * @returns {() => void}
+ */
+export function onUiThemeChange(fn) {
+  if (typeof fn !== 'function') return () => {}
+  listeners.add(fn)
+  return () => listeners.delete(fn)
 }
 
 /** 启动时读取并应用 */
