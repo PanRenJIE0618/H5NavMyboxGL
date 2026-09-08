@@ -1317,6 +1317,19 @@ html[data-theme='dark'] .map-speed.is-over .map-speed__unit {
   border: 1px solid rgba(26, 34, 56, 0.14);
 }
 
+.resume-banner--clipboard {
+  border-color: rgba(51, 112, 255, 0.28);
+}
+
+html[data-theme='dark'] .resume-banner--clipboard {
+  border-color: rgba(77, 141, 255, 0.35);
+  background: rgba(26, 35, 48, 0.96);
+}
+
+html[data-theme='dark'] .resume-banner__body strong {
+  color: #9bb8ff;
+}
+
 .offroute-banner__body {
   flex: 1;
   min-width: 0;
@@ -1976,7 +1989,8 @@ html[data-theme='contrast'] .mine-list__row.is-on .settings-switch__track {
   border-bottom: 0;
 }
 
-.device-info__row dt {
+.device-info__row dt,
+.device-info__label {
   flex: 0 0 auto;
   margin: 0;
   color: var(--mist);
@@ -1984,7 +1998,8 @@ html[data-theme='contrast'] .mine-list__row.is-on .settings-switch__track {
   font-weight: 600;
 }
 
-.device-info__row dd {
+.device-info__row dd,
+.device-info__value {
   flex: 1 1 auto;
   margin: 0;
   color: var(--ink);
@@ -2025,6 +2040,166 @@ html[data-theme='contrast'] .mine-list__row.is-on .settings-switch__track {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.app-page--map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  transition: opacity 0.28s ease, filter 0.28s ease;
+}
+
+.app-page--map.is-dimmed {
+  opacity: 0.42;
+  filter: saturate(0.85);
+  pointer-events: none;
+}
+
+.app-page--overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+}
+
+/* —— 页面 / 浮层过渡 —— */
+.page-sheet-enter-active,
+.page-sheet-leave-active {
+  transition:
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.28s ease;
+}
+
+.page-sheet-enter-from {
+  opacity: 0;
+  transform: translate3d(18%, 0, 0);
+}
+
+.page-sheet-leave-to {
+  opacity: 0;
+  transform: translate3d(10%, 0, 0);
+}
+
+.tab-bar-enter-active,
+.tab-bar-leave-active {
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.24s ease;
+}
+
+.tab-bar-enter-from,
+.tab-bar-leave-to {
+  opacity: 0;
+  transform: translate3d(0, 110%, 0);
+}
+
+.sheet-up-enter-active,
+.sheet-up-leave-active {
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.24s ease;
+}
+
+.sheet-up-enter-from,
+.sheet-up-leave-to {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+}
+
+.banner-down-enter-active,
+.banner-down-leave-active {
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease;
+}
+
+.banner-down-enter-from,
+.banner-down-leave-to {
+  opacity: 0;
+  transform: translate3d(0, -12px, 0);
+}
+
+.panel-drop-enter-active,
+.panel-drop-leave-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.panel-drop-enter-from,
+.panel-drop-leave-to {
+  opacity: 0;
+  transform: translate3d(0, -10px, 0);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.24s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.fade-pop-enter-active,
+.fade-pop-leave-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fade-pop-enter-from,
+.fade-pop-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.fade-scale-enter-active,
+.fade-scale-leave-active {
+  transition:
+    opacity 0.28s ease,
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.94) translate3d(0, 8px, 0);
+}
+
+.fade-row-enter-active,
+.fade-row-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.fade-row-enter-from,
+.fade-row-leave-to {
+  opacity: 0;
+  transform: translate3d(0, -4px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-page--map,
+  .page-sheet-enter-active,
+  .page-sheet-leave-active,
+  .tab-bar-enter-active,
+  .tab-bar-leave-active,
+  .sheet-up-enter-active,
+  .sheet-up-leave-active,
+  .banner-down-enter-active,
+  .banner-down-leave-active,
+  .panel-drop-enter-active,
+  .panel-drop-leave-active,
+  .fade-enter-active,
+  .fade-leave-active,
+  .fade-pop-enter-active,
+  .fade-pop-leave-active,
+  .fade-scale-enter-active,
+  .fade-scale-leave-active,
+  .fade-row-enter-active,
+  .fade-row-leave-active {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .tab-bar {
@@ -2138,6 +2313,7 @@ html[data-theme='contrast'] .tab-bar__btn.is-active {
   overflow: auto;
   background: var(--page-bg);
   color: var(--ink);
+  will-change: transform, opacity;
 }
 
 .quick-page__bar {
@@ -2319,6 +2495,8 @@ html[data-theme='dark'] .quick-card__go {
   position: absolute;
   inset: 0;
   z-index: 40;
+  /* 覆盖层切页动画需要独立层 */
+  will-change: transform, opacity;
 }
 
 .settings-page.is-embedded .settings-page__bar {

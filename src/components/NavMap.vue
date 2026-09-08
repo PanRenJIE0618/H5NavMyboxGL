@@ -51,7 +51,12 @@ import { normalizeHeading, shortestDelta, unwrapHeading } from '../lib/heading'
 import { DRIVE_STYLES, driveStyleLabel, planByTravelMode, TRAVEL_MODES, travelModeLabel } from '../lib/route'
 import { snapToRoute, coordsToPath } from '../lib/routeSnap'
 import { searchPlaces } from '../lib/search'
-import { debugConsoleOpen } from '../lib/debugLog'
+import {
+  clipboardFingerprint,
+  extractAddressCandidate,
+  readClipboardTextDetailed,
+} from '../lib/clipboardAddress'
+import { debugConsoleOpen, debugLog } from '../lib/debugLog'
 import {
   canUseBrowserGeolocation,
   getBrowserOpenHint,
@@ -106,7 +111,52 @@ const rerouting = ref(false)
 const voiceMuted = ref(!getVoiceEnabled())
 /** 冷启动待确认的导航会话 */
 const pendingResume = ref(null)
-/** @type {null | object} */
+/** 剪贴板疑似地址提示 */
+const clipboardOffer = ref(null)
+/** @type {string} 已弹出过的内容指纹 */
+let lastOfferedClipboardFp = ''
+/** @type {string} 用户忽略的内容指纹 */
+let dismissedClipboardFp = ''
+/** @type {string} 已判定非地址的内容指纹 */
+let lastIgnoredClipboardFp = ''
+let clipboardPollTimer = 0
+let clipboardCheckInFlight = false
+let clipboardGestureBound = false
+
+function onClipboardUserGesture() {
+  void checkClipboardForAddress({ reason: 'gesture' })
+}
+
+function startClipboardWatch() {
+  stopClipboardWatch()
+  if (typeof window === 'undefined') return
+  clipboardPollTimer = window.setInterval(() => {
+    void checkClipboardForAddress({ reason: 'poll' })
+  }, 2500)
+  bindClipboardGestureHook()
+}
+
+function stopClipboardWatch() {
+  if (clipboardPollTimer) {
+    window.clearInterval(clipboardPollTimer)
+    clipboardPollTimer = 0
+  }
+}
+
+function bindClipboardGestureHook() {
+  if (clipboardGestureBound || typeof window === 'undefined') return
+  clipboardGestureBound = true
+  // Chrome：站点已授权 clipboard-read 时，回到页面点一下通常就能读到
+  window.addEventListener('pointerdown', onClipboardUserGesture, { passive: true })
+  window.addEventListener('keydown', onClipboardUserGesture, { passive: true })
+}
+
+function unbindClipboardGestureHook() {
+  if (!clipboardGestureBound || typeof window === 'undefined') return
+  clipboardGestureBound = false
+  window.removeEventListener('pointerdown', onClipboardUserGesture)
+  window.removeEventListener('keydown', onClipboardUserGesture)
+}
 let activeNavMeta = null
 
 /** 高德风格：选中蓝线 + 白边；备选淡蓝 */
@@ -550,6 +600,7 @@ const offRouteBannerText = computed(() => {
 const overlayStyle = computed(() => ({
   '--offroute-clearance':
     (pendingResume.value && !navigating.value) ||
+    (clipboardOffer.value && !pendingResume.value && !navigating.value) ||
     (navigating.value && (offRoute.value || rerouting.value))
       ? '64px'
       : '0px',
@@ -1490,7 +1541,7 @@ async function selectPlace(place) {
   routesReady.value = false
   routeInfo.value = null
   routePlans.value = {}
-  driveStyle.value = travelMode.value === 'walk' ? 'walk' : '0'
+  driveStyle.value = travelMode.value === 'walk' ? 'walk' : getDefaultDriveStyle()
   nextGuide.value = ''
   remainingMeters.value = null
   remainingSeconds.value = null
@@ -1687,6 +1738,7 @@ async function startNavigation() {
   if (!routeInfo.value) return
   await startHeading(true)
   navigating.value = true
+  clipboardOffer.value = null
   arrived.value = false
   offRoute.value = false
   offRouteDistanceMeters.value = null
@@ -1807,6 +1859,7 @@ function onPageVisibilityChange() {
   if (document.visibilityState === 'hidden') {
     pageHiddenAt = Date.now()
     onNavVoicePageHidden()
+    stopClipboardWatch()
     return
   }
   if (document.visibilityState !== 'visible') return
@@ -1817,12 +1870,19 @@ function onPageVisibilityChange() {
     void rebindNavRuntime({ hint: true })
   }
   pageHiddenAt = 0
+  void checkClipboardForAddress({ reason: 'visible' })
+  startClipboardWatch()
 }
 
 function onPageShow(event) {
   if (event?.persisted && navigating.value) {
     void rebindNavRuntime({ hint: true })
   }
+  void checkClipboardForAddress({ reason: 'pageshow' })
+}
+
+function onWindowFocus() {
+  void checkClipboardForAddress({ reason: 'focus' })
 }
 
 function bindPageLifecycle() {
@@ -1830,6 +1890,7 @@ function bindPageLifecycle() {
   visibilityBound = true
   document.addEventListener('visibilitychange', onPageVisibilityChange)
   window.addEventListener('pageshow', onPageShow)
+  window.addEventListener('focus', onWindowFocus)
 }
 
 function unbindPageLifecycle() {
@@ -1837,6 +1898,127 @@ function unbindPageLifecycle() {
   visibilityBound = false
   document.removeEventListener('visibilitychange', onPageVisibilityChange)
   window.removeEventListener('pageshow', onPageShow)
+  window.removeEventListener('focus', onWindowFocus)
+  stopClipboardWatch()
+  unbindClipboardGestureHook()
+}
+
+/**
+ * 读取剪贴板；若文本像地址则弹出前往提示
+ * @param {{ reason?: string }} [opts]
+ */
+async function checkClipboardForAddress(opts = {}) {
+  if (clipboardCheckInFlight) return
+  if (!props.active || navigating.value || routing.value) return
+  if (pendingResume.value) return
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+
+  clipboardCheckInFlight = true
+  try {
+    const { text, error } = await readClipboardTextDetailed()
+    if (text == null) {
+      if (opts.reason === 'gesture' || opts.reason === 'focus') {
+        debugLog('clipboard 读取失败', { reason: opts.reason, error })
+      }
+      return
+    }
+
+    const fp = clipboardFingerprint(text)
+    if (!fp) return
+    if (fp === dismissedClipboardFp) return
+    if (fp === lastOfferedClipboardFp && clipboardOffer.value) return
+    if (fp === lastIgnoredClipboardFp) return
+
+    const hit = extractAddressCandidate(text)
+    if (!hit) {
+      lastIgnoredClipboardFp = fp
+      if (clipboardOffer.value) clipboardOffer.value = null
+      debugLog('clipboard 非地址', {
+        reason: opts.reason,
+        preview: fp.slice(0, 48),
+      })
+      return
+    }
+
+    if (
+      destination.value?.name &&
+      (destination.value.name === hit.query ||
+        destination.value.address === hit.query)
+    ) {
+      lastIgnoredClipboardFp = fp
+      return
+    }
+
+    lastOfferedClipboardFp = fp
+    clipboardOffer.value = {
+      query: hit.query,
+      kind: hit.kind,
+      lng: hit.lng,
+      lat: hit.lat,
+      preview: hit.query.length > 36 ? `${hit.query.slice(0, 36)}…` : hit.query,
+      fingerprint: fp,
+    }
+    debugLog('clipboard 命中地址', {
+      reason: opts.reason,
+      kind: hit.kind,
+      query: hit.query,
+    })
+  } finally {
+    clipboardCheckInFlight = false
+  }
+}
+
+function discardClipboardOffer() {
+  const fp = clipboardOffer.value?.fingerprint || lastOfferedClipboardFp
+  if (fp) dismissedClipboardFp = fp
+  clipboardOffer.value = null
+}
+
+async function confirmClipboardOffer() {
+  const offer = clipboardOffer.value
+  if (!offer?.query || routing.value || navigating.value) return
+  unlockNavVoice({ primingText: '开始导航' })
+  dismissedClipboardFp = offer.fingerprint || ''
+  clipboardOffer.value = null
+  locatingHint.value = '正在识别剪贴板地址…'
+
+  try {
+    let place = null
+    if (
+      offer.kind === 'coord' &&
+      Number.isFinite(Number(offer.lng)) &&
+      Number.isFinite(Number(offer.lat))
+    ) {
+      place = {
+        name: '剪贴板坐标',
+        address: offer.query,
+        lng: Number(offer.lng),
+        lat: Number(offer.lat),
+      }
+    } else {
+      const around =
+        lng.value != null && lat.value != null
+          ? { lng: Number(lng.value), lat: Number(lat.value) }
+          : null
+      const found = await searchPlaces(offer.query, around, TIANDITU_TK)
+      place = found[0] || null
+    }
+
+    if (!place) {
+      locatingHint.value = '未找到该地址，请手动搜索'
+      keyword.value = offer.query
+      return
+    }
+
+    keyword.value = place.name || offer.query
+    await selectPlace(place)
+    locatingHint.value = '正在规划路线…'
+    const ok = await prepareDualRoutes({ previewDual: false })
+    if (ok) await startNavigation()
+    else if (!searchError.value) locatingHint.value = '路线规划失败'
+  } catch (err) {
+    locatingHint.value = err?.message || '剪贴板导航失败'
+  }
 }
 
 function maybeOfferResumeSession() {
@@ -2490,11 +2672,18 @@ defineExpose({
 watch(
   () => props.active,
   (visible) => {
-    if (!visible || !mapReady.value) return
-    requestAnimationFrame(() => {
-      syncOverlayClearance()
-      refreshMapSize()
-    })
+    if (!visible) {
+      stopClipboardWatch()
+      return
+    }
+    if (mapReady.value) {
+      requestAnimationFrame(() => {
+        syncOverlayClearance()
+        refreshMapSize()
+      })
+    }
+    void checkClipboardForAddress()
+    startClipboardWatch()
   },
 )
 
@@ -2519,6 +2708,8 @@ onMounted(() => {
   })
   initMap()
   requestAnimationFrame(() => bindOverlayObservers())
+  void checkClipboardForAddress()
+  startClipboardWatch()
 })
 
 onUnmounted(() => {
@@ -2589,19 +2780,23 @@ onUnmounted(() => {
 
 <template>
   <div ref="stageEl" class="stage" :style="overlayStyle">
+    <Transition name="overlay-fade">
     <div v-if="showWeChatGate" class="browser-gate" role="dialog" aria-modal="true">
-      <div class="browser-gate__card">
-        <p class="browser-gate__kicker">微信内置浏览器</p>
-        <h2>无法在此打开本页</h2>
-        <p>
-          当前不是可在微信内使用的正式 HTTPS 环境。
-          请点右上角 <strong>···</strong> → <strong>在浏览器中打开</strong>。
-        </p>
-        <p class="browser-gate__url">{{ httpsUrl }}</p>
-        <button class="browser-gate__btn" type="button" @click="copyOpenUrl">复制链接</button>
-        <p class="browser-gate__hint">推荐：系统浏览器 / Chrome / Safari / 百度浏览器</p>
-      </div>
+      <Transition name="fade-scale" appear>
+        <div class="browser-gate__card">
+          <p class="browser-gate__kicker">微信内置浏览器</p>
+          <h2>无法在此打开本页</h2>
+          <p>
+            当前不是可在微信内使用的正式 HTTPS 环境。
+            请点右上角 <strong>···</strong> → <strong>在浏览器中打开</strong>。
+          </p>
+          <p class="browser-gate__url">{{ httpsUrl }}</p>
+          <button class="browser-gate__btn" type="button" @click="copyOpenUrl">复制链接</button>
+          <p class="browser-gate__hint">推荐：系统浏览器 / Chrome / Safari / 百度浏览器</p>
+        </div>
+      </Transition>
     </div>
+    </Transition>
 
     <div class="map-shell">
       <header ref="mastEl" class="mast">
@@ -2641,124 +2836,163 @@ onUnmounted(() => {
             {{ searching ? '搜索中' : '搜索' }}
           </button>
         </form>
-        <div v-if="showSearchPanel" class="search-panel">
-          <div class="search-panel__bar">
-            <span>{{ searchError ? '搜索提示' : `找到 ${places.length} 条结果` }}</span>
-            <button class="search-panel__close" type="button" @click="closeSearchPanel">关闭</button>
+        <Transition name="panel-drop">
+          <div v-if="showSearchPanel" class="search-panel">
+            <div class="search-panel__bar">
+              <span>{{ searchError ? '搜索提示' : `找到 ${places.length} 条结果` }}</span>
+              <button class="search-panel__close" type="button" @click="closeSearchPanel">关闭</button>
+            </div>
+            <p v-if="searchError" class="search-panel__error">{{ searchError }}</p>
+            <button
+              v-for="(place, index) in places"
+              :key="`${place.name}-${index}`"
+              class="search-item"
+              type="button"
+              @click.stop="selectPlace(place)"
+            >
+              <strong>{{ place.name }}</strong>
+              <span>{{ place.suggest ? '相关搜索' : place.address || `${place.lng.toFixed(4)}, ${place.lat.toFixed(4)}` }}</span>
+            </button>
           </div>
-          <p v-if="searchError" class="search-panel__error">{{ searchError }}</p>
-          <button
-            v-for="(place, index) in places"
-            :key="`${place.name}-${index}`"
-            class="search-item"
-            type="button"
-            @click.stop="selectPlace(place)"
-          >
-            <strong>{{ place.name }}</strong>
-            <span>{{ place.suggest ? '相关搜索' : place.address || `${place.lng.toFixed(4)}, ${place.lat.toFixed(4)}` }}</span>
-          </button>
-        </div>
+        </Transition>
       </header>
 
-      <div
-        v-if="pendingResume && !navigating"
-        class="resume-banner"
-        role="status"
-      >
-        <div class="resume-banner__body">
-          <strong>继续导航？</strong>
-          <span>
-            检测到未完成的导航：前往 {{ pendingResume.destination?.name || '目的地' }}
-            <template v-if="pendingResume.remainingMeters != null">
-              · 剩余约 {{ formatDistance(pendingResume.remainingMeters) }}
-            </template>
-          </span>
-        </div>
-        <div class="resume-banner__actions">
-          <button class="resume-banner__btn resume-banner__btn--ghost" type="button" @click="discardResumeSession">
-            放弃
-          </button>
-          <button class="resume-banner__btn" type="button" @click="confirmResumeSession">
-            继续导航
-          </button>
-        </div>
-      </div>
-
-      <div
-        v-if="navigating && (offRoute || rerouting)"
-        class="offroute-banner"
-        role="alert"
-      >
-        <div class="offroute-banner__body">
-          <strong>{{ rerouting ? '偏航重规划' : '已偏航' }}</strong>
-          <span>{{ offRouteBannerText }}</span>
-        </div>
-        <button
-          class="offroute-banner__btn"
-          type="button"
-          :disabled="rerouting"
-          @click="onRerouteClick"
+      <Transition name="banner-down">
+        <div
+          v-if="pendingResume && !navigating"
+          class="resume-banner"
+          role="status"
         >
-          {{ rerouting ? '规划中…' : '重新规划' }}
-        </button>
-      </div>
+          <div class="resume-banner__body">
+            <strong>继续导航？</strong>
+            <span>
+              检测到未完成的导航：前往 {{ pendingResume.destination?.name || '目的地' }}
+              <template v-if="pendingResume.remainingMeters != null">
+                · 剩余约 {{ formatDistance(pendingResume.remainingMeters) }}
+              </template>
+            </span>
+          </div>
+          <div class="resume-banner__actions">
+            <button class="resume-banner__btn resume-banner__btn--ghost" type="button" @click="discardResumeSession">
+              放弃
+            </button>
+            <button class="resume-banner__btn" type="button" @click="confirmResumeSession">
+              继续导航
+            </button>
+          </div>
+        </div>
+      </Transition>
+
+      <Transition name="banner-down">
+        <div
+          v-if="clipboardOffer && !pendingResume && !navigating"
+          class="resume-banner resume-banner--clipboard"
+          role="status"
+        >
+          <div class="resume-banner__body">
+            <strong>前往剪贴板地点？</strong>
+            <span>检测到地址：{{ clipboardOffer.preview }}</span>
+          </div>
+          <div class="resume-banner__actions">
+            <button class="resume-banner__btn resume-banner__btn--ghost" type="button" @click="discardClipboardOffer">
+              忽略
+            </button>
+            <button
+              class="resume-banner__btn"
+              type="button"
+              :disabled="routing"
+              @click="confirmClipboardOffer"
+            >
+              {{ routing ? '规划中…' : '前往并导航' }}
+            </button>
+          </div>
+        </div>
+      </Transition>
+
+      <Transition name="banner-down">
+        <div
+          v-if="navigating && (offRoute || rerouting)"
+          class="offroute-banner"
+          role="alert"
+        >
+          <div class="offroute-banner__body">
+            <strong>{{ rerouting ? '偏航重规划' : '已偏航' }}</strong>
+            <span>{{ offRouteBannerText }}</span>
+          </div>
+          <button
+            class="offroute-banner__btn"
+            type="button"
+            :disabled="rerouting"
+            @click="onRerouteClick"
+          >
+            {{ rerouting ? '规划中…' : '重新规划' }}
+          </button>
+        </div>
+      </Transition>
 
       <div class="map-camera">
         <div ref="mapEl" class="map" />
       </div>
-      <div
-        v-if="mapReady"
-        class="map-speed"
-        :class="{ 'is-over': isSpeeding, 'is-idle': speedKmh == null }"
-        role="status"
-        :aria-label="
-          speedKmh == null
-            ? '测速暂无数据'
-            : isSpeeding
-              ? `超速 ${speedDisplay} 公里每小时`
-              : `当前速度 ${speedDisplay} 公里每小时`
-        "
-        :title="`限速 ${speedLimitKmh} km/h`"
-      >
-        <strong class="map-speed__value">{{ speedDisplay }}</strong>
-        <span class="map-speed__unit">km/h</span>
-        <span v-if="isSpeeding" class="map-speed__tag">超速</span>
-      </div>
-      <div
-        v-if="mapReady && navigating"
-        class="nav-progress"
-        role="progressbar"
-        :aria-valuenow="navRemainPercent"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        :aria-label="`剩余路程 ${navRemainPercent}%`"
-      >
-        <div class="nav-progress__rail">
-          <div
-            class="nav-progress__bar"
-            :style="{ height: `${navRemainPercent}%` }"
-          />
-        </div>
-      </div>
-      <div
-        v-if="mapReady && !navigating"
-        class="map-travel"
-        role="group"
-        aria-label="出行方式"
-      >
-        <button
-          v-for="item in TRAVEL_MODES"
-          :key="item.id"
-          class="map-travel__btn"
-          type="button"
-          :class="{ 'is-active': travelMode === item.id }"
-          :disabled="routing"
-          @click="setTravelMode(item.id)"
+      <Transition name="fade-pop">
+        <div
+          v-if="mapReady"
+          class="map-speed"
+          :class="{ 'is-over': isSpeeding, 'is-idle': speedKmh == null }"
+          role="status"
+          :aria-label="
+            speedKmh == null
+              ? '测速暂无数据'
+              : isSpeeding
+                ? `超速 ${speedDisplay} 公里每小时`
+                : `当前速度 ${speedDisplay} 公里每小时`
+          "
+          :title="`限速 ${speedLimitKmh} km/h`"
         >
-          {{ item.label }}
-        </button>
-      </div>
-      <div v-if="mapReady" class="map-fabs">
+          <strong class="map-speed__value">{{ speedDisplay }}</strong>
+          <span class="map-speed__unit">km/h</span>
+          <span v-if="isSpeeding" class="map-speed__tag">超速</span>
+        </div>
+      </Transition>
+      <Transition name="fade-pop">
+        <div
+          v-if="mapReady && navigating"
+          class="nav-progress"
+          role="progressbar"
+          :aria-valuenow="navRemainPercent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="`剩余路程 ${navRemainPercent}%`"
+        >
+          <div class="nav-progress__rail">
+            <div
+              class="nav-progress__bar"
+              :style="{ height: `${navRemainPercent}%` }"
+            />
+          </div>
+        </div>
+      </Transition>
+      <Transition name="fade-pop">
+        <div
+          v-if="mapReady && !navigating"
+          class="map-travel"
+          role="group"
+          aria-label="出行方式"
+        >
+          <button
+            v-for="item in TRAVEL_MODES"
+            :key="item.id"
+            class="map-travel__btn"
+            type="button"
+            :class="{ 'is-active': travelMode === item.id }"
+            :disabled="routing"
+            @click="setTravelMode(item.id)"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+      </Transition>
+      <Transition name="fade-pop">
+        <div v-if="mapReady" class="map-fabs">
         <button
           v-if="navigating || routesReady"
           class="map-fab map-voice"
@@ -2824,23 +3058,29 @@ onUnmounted(() => {
           </svg>
         </button>
       </div>
+      </Transition>
 
-      <div v-if="!mapReady && !mapError" class="veil">
-        <span class="veil__spin" />
-        <p>正在装载底图</p>
-      </div>
+      <Transition name="fade">
+        <div v-if="!mapReady && !mapError" class="veil">
+          <span class="veil__spin" />
+          <p>正在装载底图</p>
+        </div>
+      </Transition>
 
-      <div v-if="mapError" class="veil">
-        <p>{{ mapError }}</p>
-      </div>
+      <Transition name="fade">
+        <div v-if="mapError" class="veil">
+          <p>{{ mapError }}</p>
+        </div>
+      </Transition>
     </div>
 
-    <section
-      v-show="!showSearchPanel"
-      ref="hudEl"
-      class="hud"
-      aria-live="polite"
-    >
+    <Transition name="sheet-up">
+      <section
+        v-show="!showSearchPanel"
+        ref="hudEl"
+        class="hud"
+        aria-live="polite"
+      >
       <p v-if="statusText" class="hud__status">
         <span class="hud__dot" :class="{ 'is-live': watching || (lng != null && !loading) }" />
         {{ statusText }}
@@ -2918,6 +3158,7 @@ onUnmounted(() => {
         {{ browserHint?.detail || `请用 HTTPS 打开 ${httpsUrl}` }}
       </p>
     </section>
+    </Transition>
 
     <DevConsole />
   </div>

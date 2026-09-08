@@ -280,12 +280,19 @@ function onBack() {
           <p>运行环境基础信息，不含账号与安全策略</p>
         </header>
 
-        <dl class="device-info">
-          <div v-for="row in visibleDeviceRows" :key="row.label" class="device-info__row">
-            <dt>{{ row.label }}</dt>
-            <dd>{{ row.value }}</dd>
-          </div>
-        </dl>
+        <div class="device-info" role="list">
+          <TransitionGroup name="fade-row" tag="div">
+            <div
+              v-for="row in visibleDeviceRows"
+              :key="row.label"
+              class="device-info__row"
+              role="listitem"
+            >
+              <span class="device-info__label">{{ row.label }}</span>
+              <span class="device-info__value">{{ row.value }}</span>
+            </div>
+          </TransitionGroup>
+        </div>
         <button
           class="mine-more"
           type="button"

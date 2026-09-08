@@ -44,40 +44,55 @@ async function onSelectHistory(item) {
     :class="{ 'is-nav': navigating, 'has-tabs': !navigating }"
   >
     <div class="app-shell__main">
+      <!-- 地图常驻，避免切页重建 -->
       <NavMap
         ref="mapRef"
-        v-show="tab === 'home'"
+        class="app-page app-page--map"
+        :class="{ 'is-dimmed': tab !== 'home' }"
         :active="tab === 'home'"
         @navigating-change="onNavigatingChange"
       />
-      <QuickNav
-        v-show="tab === 'quick'"
-        ref="quickRef"
-        @select="onSelectHistory"
-        @go-home="setTab('home')"
-      />
-      <MapSettings v-show="tab === 'mine'" embedded />
+
+      <Transition name="page-sheet">
+        <QuickNav
+          v-if="tab === 'quick'"
+          ref="quickRef"
+          class="app-page app-page--overlay"
+          @select="onSelectHistory"
+          @go-home="setTab('home')"
+        />
+      </Transition>
+
+      <Transition name="page-sheet">
+        <MapSettings
+          v-if="tab === 'mine'"
+          class="app-page app-page--overlay"
+          embedded
+        />
+      </Transition>
     </div>
 
-    <nav
-      v-show="!navigating"
-      class="tab-bar"
-      aria-label="主导航"
-    >
-      <div class="tab-bar__group" role="tablist">
-        <button
-          v-for="item in TABS"
-          :key="item.id"
-          class="tab-bar__btn"
-          type="button"
-          role="tab"
-          :class="{ 'is-active': tab === item.id }"
-          :aria-selected="tab === item.id"
-          @click="setTab(item.id)"
-        >
-          {{ item.label }}
-        </button>
-      </div>
-    </nav>
+    <Transition name="tab-bar">
+      <nav
+        v-if="!navigating"
+        class="tab-bar"
+        aria-label="主导航"
+      >
+        <div class="tab-bar__group" role="tablist">
+          <button
+            v-for="item in TABS"
+            :key="item.id"
+            class="tab-bar__btn"
+            type="button"
+            role="tab"
+            :class="{ 'is-active': tab === item.id }"
+            :aria-selected="tab === item.id"
+            @click="setTab(item.id)"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+      </nav>
+    </Transition>
   </div>
 </template>
