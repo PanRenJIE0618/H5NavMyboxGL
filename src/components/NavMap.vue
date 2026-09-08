@@ -8,13 +8,11 @@ import {
   LOCATED_ZOOM,
   MAX_ZOOM,
   NAV_ZOOM,
-  TIANDITU_BASE_LAYER,
-  TIANDITU_LABEL_LAYER,
   TIANDITU_TK,
   getBehaviorPolicy,
   onBehaviorPolicyChange,
-  tiandituTileUrls,
 } from '../config'
+import { basemapTileUrls, getStoredBasemap, onBasemapChange } from '../lib/basemap'
 import { LocationBeacon } from '../lib/LocationBeacon'
 import { createDeviceWalkBehavior } from '../lib/deviceWalkBehavior'
 import { createOffRouteMonitor } from '../lib/offRouteMonitor'
@@ -49,6 +47,12 @@ import {
   isWeChatBrowser,
 } from '../lib/secureContext'
 import DevConsole from './DevConsole.vue'
+
+const props = defineProps({
+  /** 页面是否处于前台展示（从设置返回时触发地图 resize） */
+  active: { type: Boolean, default: true },
+})
+const emit = defineEmits(['open-settings'])
 
 function toggleDebugConsole() {
   debugConsoleOpen.value = !debugConsoleOpen.value
@@ -182,6 +186,7 @@ let lastSessionSaveAt = 0
 let lastSessionSaveRemainMeters = null
 let pageHiddenAt = 0
 let visibilityBound = false
+let unsubBasemap = null
 
 const offRouteMonitor = createOffRouteMonitor(() => getBehaviorPolicy(), {
   // 后续联调：返回后端重规划结果即可替换本地 planByTravelMode
@@ -710,11 +715,45 @@ async function scheduleFitRouteOverview(paths, options = {}) {
   })
 }
 
+/** Mapbox GL v1：替换栅格 tiles 并清缓存 */
+function replaceRasterTiles(sourceId, tiles) {
+  if (!map || !Array.isArray(tiles) || !tiles.length) return
+  const source = map.getSource(sourceId)
+  if (!source) return
+  try {
+    if (typeof source.setTiles === 'function') {
+      source.setTiles(tiles)
+      return
+    }
+  } catch {
+    // fall through
+  }
+  try {
+    source.tiles = tiles
+    if (source._options) source._options.tiles = tiles
+    const cache = map.style?.sourceCaches?.[sourceId]
+    cache?.clearTiles?.()
+    cache?.update?.(map.transform)
+    map.triggerRepaint?.()
+  } catch {
+    // ignore
+  }
+}
+
+function applyBasemapToMap(id) {
+  if (!map) return
+  const { baseTiles, labelTiles } = basemapTileUrls(id)
+  replaceRasterTiles('tdt-vec', baseTiles)
+  replaceRasterTiles('tdt-cva', labelTiles)
+}
+
 async function initMap() {
   try {
     const mapboxgl = window.mapboxgl
     if (!mapboxgl) throw new Error('Mapbox GL 未加载')
     if (!mapEl.value) throw new Error('地图容器未就绪')
+
+    const { baseTiles, labelTiles } = basemapTileUrls(getStoredBasemap())
 
     map = new mapboxgl.Map({
       container: mapEl.value,
@@ -723,13 +762,13 @@ async function initMap() {
         sources: {
           'tdt-vec': {
             type: 'raster',
-            tiles: tiandituTileUrls(TIANDITU_BASE_LAYER),
+            tiles: baseTiles,
             tileSize: 256,
             maxzoom: MAX_ZOOM,
           },
           'tdt-cva': {
             type: 'raster',
-            tiles: tiandituTileUrls(TIANDITU_LABEL_LAYER),
+            tiles: labelTiles,
             tileSize: 256,
             maxzoom: MAX_ZOOM,
           },
@@ -2261,6 +2300,17 @@ watch(nextGuide, (text, prev) => {
   speakNav(text)
 })
 
+watch(
+  () => props.active,
+  (visible) => {
+    if (!visible || !mapReady.value) return
+    requestAnimationFrame(() => {
+      refreshMapSize()
+      syncOverlayClearance()
+    })
+  },
+)
+
 watch(offRoute, (over, prev) => {
   if (!navigating.value || !over || prev || rerouting.value) return
   speakNav('已偏离规划路线', { interrupt: false })
@@ -2268,11 +2318,16 @@ watch(offRoute, (over, prev) => {
 
 onMounted(() => {
   bindPageLifecycle()
+  unsubBasemap = onBasemapChange((id) => {
+    applyBasemapToMap(id)
+  })
   initMap()
   requestAnimationFrame(() => bindOverlayObservers())
 })
 
 onUnmounted(() => {
+  unsubBasemap?.()
+  unsubBasemap = null
   unbindPageLifecycle()
   // 保留 sessionStorage 快照，供刷新 / 被杀后「继续导航」
   stopNavigation({ keepSession: true })
@@ -2491,6 +2546,29 @@ onUnmounted(() => {
           @click="toggleVoiceMute"
         >
           <span class="map-voice__label">{{ voiceMuted ? '静音' : '语音' }}</span>
+        </button>
+        <button
+          class="map-fab map-settings"
+          type="button"
+          aria-label="地图设置"
+          title="设置"
+          @click="emit('open-settings')"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            />
+            <path
+              d="M19.4 13.1v-2.2l-1.7-.3a6.4 6.4 0 0 0-.5-1.2l1-1.4-1.6-1.6-1.4 1a6.4 6.4 0 0 0-1.2-.5L13.1 4.6h-2.2l-.3 1.7a6.4 6.4 0 0 0-1.2.5l-1.4-1-1.6 1.6 1 1.4a6.4 6.4 0 0 0-.5 1.2l-1.7.3v2.2l1.7.3c.12.42.29.82.5 1.2l-1 1.4 1.6 1.6 1.4-1c.38.21.78.38 1.2.5l.3 1.7h2.2l.3-1.7c.42-.12.82-.29 1.2-.5l1.4 1 1.6-1.6-1-1.4c.21-.38.38-.78.5-1.2l1.7-.3Z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
         <button
           class="map-fab map-heading-test"
