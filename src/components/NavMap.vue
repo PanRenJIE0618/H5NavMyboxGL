@@ -21,17 +21,25 @@ import { createOffRouteMonitor } from '../lib/offRouteMonitor'
 import {
   getNavVoiceSupportHint,
   isNavVoiceMuted,
+  onNavVoicePageHidden,
+  onNavVoicePageVisible,
   speakNav,
   speakNavOverview,
   stopNavVoice,
   toggleNavVoiceMuted,
   unlockNavVoice,
 } from '../lib/navVoice'
+import {
+  buildNavSessionSnapshot,
+  clearNavSession,
+  loadNavSession,
+  saveNavSession,
+} from '../lib/navSession'
 import { formatDistance, formatDuration, haversineMeters } from '../lib/geo'
 import { reverseGeocode } from '../lib/geocode'
 import { normalizeHeading, shortestDelta, unwrapHeading } from '../lib/heading'
 import { DRIVE_STYLES, driveStyleLabel, planByTravelMode, TRAVEL_MODES, travelModeLabel } from '../lib/route'
-import { snapToRoute } from '../lib/routeSnap'
+import { snapToRoute, coordsToPath } from '../lib/routeSnap'
 import { searchPlaces } from '../lib/search'
 import { debugConsoleOpen } from '../lib/debugLog'
 import {
@@ -80,6 +88,8 @@ const offRoute = ref(false)
 const offRouteDistanceMeters = ref(null)
 const rerouting = ref(false)
 const voiceMuted = ref(isNavVoiceMuted())
+/** 冷启动待确认的导航会话 */
+const pendingResume = ref(null)
 
 /** 高德风格：选中蓝线 + 白边；备选淡蓝 */
 const ROUTE_COLOR_ACTIVE = '#3370FF'
@@ -100,6 +110,7 @@ const {
   client,
   locate,
   watchLocation,
+  restartWatch,
 } = useGeolocation()
 const secureOk = canUseBrowserGeolocation()
 const httpsUrl = getHttpsUrl()
@@ -111,6 +122,7 @@ const {
   heading: deviceHeading,
   available: headingAvailable,
   start: startHeading,
+  rebind: rebindHeading,
 } = useDeviceHeading()
 
 /** 地图偏航（朝上导航）；用 Mapbox bearing，不用 CSS 旋转容器 */
@@ -165,6 +177,11 @@ let lastGoodBearing = 0
 let locationTickPaused = false
 let locationResumeTimer = 0
 let viewLockResumeTimer = 0
+/** 会话快照节流 */
+let lastSessionSaveAt = 0
+let lastSessionSaveRemainMeters = null
+let pageHiddenAt = 0
+let visibilityBound = false
 
 const offRouteMonitor = createOffRouteMonitor(() => getBehaviorPolicy(), {
   // 后续联调：返回后端重规划结果即可替换本地 planByTravelMode
@@ -498,7 +515,10 @@ const offRouteBannerText = computed(() => {
 
 const overlayStyle = computed(() => ({
   '--offroute-clearance':
-    navigating.value && (offRoute.value || rerouting.value) ? '56px' : '0px',
+    (pendingResume.value && !navigating.value) ||
+    (navigating.value && (offRoute.value || rerouting.value))
+      ? '64px'
+      : '0px',
 }))
 
 let lastSpeedingAlertAt = 0
@@ -774,6 +794,7 @@ async function initMap() {
       window.visualViewport.addEventListener('resize', onMapContainerResize)
     }
     refreshMapSize()
+    maybeOfferResumeSession()
     await locateOnce(true)
   } catch (err) {
     mapError.value = err.message || '地图初始化失败'
@@ -1501,10 +1522,14 @@ async function startNavigation() {
     speakNav(nextGuide.value, { interrupt: false, dedupeMs: 0 })
   }
 
+  persistNavSession(true)
+  pendingResume.value = null
+
   try {
     await watchLocation(onLocationTick)
   } catch (err) {
     navigating.value = false
+    clearNavSession()
     stopNavVoice()
     locatingHint.value = err?.message || '无法持续定位，导航已取消'
   }
@@ -1516,8 +1541,198 @@ function onStartNavClick() {
   void startNavigation()
 }
 
+function collectNavSessionState() {
+  return {
+    destination: destination.value,
+    travelMode: travelMode.value,
+    driveStyle: driveStyle.value,
+    routeInfo: routeInfo.value,
+    remainingMeters: remainingMeters.value,
+    remainingSeconds: remainingSeconds.value,
+    nextGuide: nextGuide.value,
+    followUser: followUser.value,
+    headingTestLock: headingTestLock.value,
+  }
+}
+
+function persistNavSession(force = false) {
+  if (!navigating.value || !destination.value || !routeInfo.value?.path?.length) return
+  const policy = getBehaviorPolicy()
+  const throttleMs = Number(policy.navSessionPersistThrottleMs) || 15000
+  const minMeters = Number(policy.navSessionPersistMinMeters) || 50
+  const now = Date.now()
+  const remain = remainingMeters.value
+  if (!force) {
+    const elapsedOk = now - lastSessionSaveAt >= throttleMs
+    const movedOk =
+      lastSessionSaveRemainMeters == null ||
+      (Number.isFinite(remain) &&
+        Math.abs(Number(remain) - Number(lastSessionSaveRemainMeters)) >= minMeters)
+    if (!elapsedOk && !movedOk) return
+  }
+  const snap = buildNavSessionSnapshot(collectNavSessionState())
+  if (!snap) return
+  if (saveNavSession(snap)) {
+    lastSessionSaveAt = now
+    lastSessionSaveRemainMeters = remain
+  }
+}
+
+async function rebindNavRuntime({ hint = true } = {}) {
+  try {
+    await restartWatch(onLocationTick)
+  } catch (err) {
+    locatingHint.value = err?.message || '无法恢复定位，请检查权限后重试'
+    return false
+  }
+  rebindHeading()
+  try {
+    await startHeading(true)
+  } catch {
+    // ignore
+  }
+  if (lng.value != null && lat.value != null) {
+    applyNavCamera({ lng: lng.value, lat: lat.value })
+  }
+  refreshMapSize()
+  onNavVoicePageVisible({
+    hiddenMs: pageHiddenAt ? Date.now() - pageHiddenAt : 0,
+  })
+  if (hint) {
+    locatingHint.value = '定位已恢复'
+    window.setTimeout(() => {
+      if (locatingHint.value === '定位已恢复') locatingHint.value = ''
+    }, 1500)
+  }
+  return true
+}
+
+function onPageVisibilityChange() {
+  if (typeof document === 'undefined') return
+  if (document.visibilityState === 'hidden') {
+    pageHiddenAt = Date.now()
+    onNavVoicePageHidden()
+    return
+  }
+  if (document.visibilityState !== 'visible') return
+  onNavVoicePageVisible({
+    hiddenMs: pageHiddenAt ? Date.now() - pageHiddenAt : 0,
+  })
+  if (navigating.value) {
+    void rebindNavRuntime({ hint: true })
+  }
+  pageHiddenAt = 0
+}
+
+function onPageShow(event) {
+  if (event?.persisted && navigating.value) {
+    void rebindNavRuntime({ hint: true })
+  }
+}
+
+function bindPageLifecycle() {
+  if (visibilityBound || typeof window === 'undefined') return
+  visibilityBound = true
+  document.addEventListener('visibilitychange', onPageVisibilityChange)
+  window.addEventListener('pageshow', onPageShow)
+}
+
+function unbindPageLifecycle() {
+  if (!visibilityBound || typeof window === 'undefined') return
+  visibilityBound = false
+  document.removeEventListener('visibilitychange', onPageVisibilityChange)
+  window.removeEventListener('pageshow', onPageShow)
+}
+
+function maybeOfferResumeSession() {
+  if (navigating.value || pendingResume.value) return
+  const session = loadNavSession()
+  if (!session) return
+  pendingResume.value = session
+}
+
+function discardResumeSession() {
+  clearNavSession()
+  pendingResume.value = null
+  locatingHint.value = '已放弃未完成的导航'
+  window.setTimeout(() => {
+    if (locatingHint.value === '已放弃未完成的导航') locatingHint.value = ''
+  }, 1600)
+}
+
+async function confirmResumeSession() {
+  const session = pendingResume.value
+  if (!session) return
+  unlockNavVoice({ primingText: '继续导航' })
+  pendingResume.value = null
+
+  const path = coordsToPath(session.route?.path || [])
+  if (path.length < 2) {
+    clearNavSession()
+    locatingHint.value = '会话路线无效，已清除'
+    return
+  }
+
+  destination.value = {
+    name: session.destination.name || '目的地',
+    lng: Number(session.destination.lng),
+    lat: Number(session.destination.lat),
+    address: session.destination.address || '',
+  }
+  travelMode.value = session.travelMode === 'walk' ? 'walk' : 'drive'
+  driveStyle.value = String(
+    session.driveStyle || (travelMode.value === 'walk' ? 'walk' : '0'),
+  )
+  routeInfo.value = {
+    mode: session.route.mode || travelMode.value,
+    style: session.route.style || driveStyle.value,
+    distanceMeters: Number(session.route.distanceMeters) || 0,
+    durationSeconds: Number(session.route.durationSeconds) || 0,
+    path,
+    guides: Array.isArray(session.route.guides) ? session.route.guides : [],
+  }
+  routePlans.value = { [driveStyle.value]: routeInfo.value }
+  routesReady.value = true
+  remainingMeters.value =
+    session.remainingMeters == null
+      ? routeInfo.value.distanceMeters
+      : Number(session.remainingMeters)
+  remainingSeconds.value =
+    session.remainingSeconds == null
+      ? routeInfo.value.durationSeconds
+      : Number(session.remainingSeconds)
+  nextGuide.value = session.nextGuide || routeInfo.value.guides?.[0]?.text || ''
+  followUser.value = session.followUser !== false
+  headingTestLock.value = session.headingTestLock !== false
+  routePreviewLock.value = false
+  arrived.value = false
+  offRoute.value = false
+  offRouteDistanceMeters.value = null
+  arriveHits = 0
+  lastDrawnRemainMeters = null
+
+  setDestMarker(destination.value)
+  clearIdleRouteLines()
+  setRouteLine(driveStyle.value, path, true)
+  navigating.value = true
+  offRouteMonitor.start()
+  applyHeadingDragLock()
+  persistNavSession(true)
+
+  const ok = await rebindNavRuntime({ hint: false })
+  locatingHint.value = ok ? '已继续导航' : locatingHint.value || '导航已恢复，定位待重试'
+  window.setTimeout(() => {
+    if (locatingHint.value === '已继续导航') locatingHint.value = ''
+  }, 1800)
+}
+
 function stopNavigation(opts = {}) {
   navigating.value = false
+  if (!opts.keepSession) {
+    clearNavSession()
+    lastSessionSaveAt = 0
+    lastSessionSaveRemainMeters = null
+  }
   offRoute.value = false
   offRouteDistanceMeters.value = null
   rerouting.value = false
@@ -1608,6 +1823,8 @@ function onNavUpdate(pos) {
   } else {
     arriveHits = 0
   }
+
+  persistNavSession(false)
 }
 
 function toggleVoiceMute() {
@@ -1676,6 +1893,7 @@ async function rerouteAfterYaw(current) {
     offRoute.value = false
     offRouteDistanceMeters.value = null
     offRouteMonitor.reset('rerouted')
+    persistNavSession(true)
   } catch (err) {
     nextGuide.value = err.message || '重新规划失败，请靠近原路线'
     speakNav(nextGuide.value, { interrupt: true, dedupeMs: 0 })
@@ -1979,6 +2197,8 @@ function clearAllRouteLines() {
 
 function clearDestination() {
   stopNavigation()
+  pendingResume.value = null
+  clearNavSession()
   destination.value = null
   routeInfo.value = null
   routePlans.value = {}
@@ -2047,12 +2267,15 @@ watch(offRoute, (over, prev) => {
 })
 
 onMounted(() => {
+  bindPageLifecycle()
   initMap()
   requestAnimationFrame(() => bindOverlayObservers())
 })
 
 onUnmounted(() => {
-  stopNavigation()
+  unbindPageLifecycle()
+  // 保留 sessionStorage 快照，供刷新 / 被杀后「继续导航」
+  stopNavigation({ keepSession: true })
   clearLocationResumeTimer()
   overlayObserver?.disconnect?.()
   overlayObserver = null
@@ -2179,6 +2402,30 @@ onUnmounted(() => {
           </button>
         </div>
       </header>
+
+      <div
+        v-if="pendingResume && !navigating"
+        class="resume-banner"
+        role="status"
+      >
+        <div class="resume-banner__body">
+          <strong>继续导航？</strong>
+          <span>
+            检测到未完成的导航：前往 {{ pendingResume.destination?.name || '目的地' }}
+            <template v-if="pendingResume.remainingMeters != null">
+              · 剩余约 {{ formatDistance(pendingResume.remainingMeters) }}
+            </template>
+          </span>
+        </div>
+        <div class="resume-banner__actions">
+          <button class="resume-banner__btn resume-banner__btn--ghost" type="button" @click="discardResumeSession">
+            放弃
+          </button>
+          <button class="resume-banner__btn" type="button" @click="confirmResumeSession">
+            继续导航
+          </button>
+        </div>
+      </div>
 
       <div
         v-if="navigating && (offRoute || rerouting)"

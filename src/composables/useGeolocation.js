@@ -387,6 +387,12 @@ export function useGeolocation() {
     watching.value = false
   }
 
+  /** 强制停掉旧 watch 再启动（回前台时防止「假 listening」） */
+  function restartWatch(onUpdate) {
+    stopWatch()
+    return watchLocation(onUpdate)
+  }
+
   function fail(message) {
     error.value = message
     loading.value = false
@@ -416,6 +422,7 @@ export function useGeolocation() {
     updatedAt,
     locate,
     watchLocation,
+    restartWatch,
     stopWatch,
     LOCATED_ZOOM,
   }

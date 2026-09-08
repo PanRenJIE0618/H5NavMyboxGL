@@ -243,3 +243,46 @@ export function getNavVoiceSupportHint() {
   }
   return ''
 }
+
+let pageHiddenAt = 0
+
+/** 页面进入后台：停播报与看门狗 */
+export function onNavVoicePageHidden() {
+  pageHiddenAt = Date.now()
+  stopResumeWatchdog()
+  if (!canSpeak()) return
+  try {
+    window.speechSynthesis.cancel()
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 页面回前台。
+ * @param {{ hiddenMs?: number }} [options]
+ */
+export function onNavVoicePageVisible(options = {}) {
+  const policyMs = Number(getBehaviorPolicy().navVoiceRelockHiddenMs)
+  const relockAfter = Number.isFinite(policyMs) ? policyMs : 30000
+  const hiddenMs =
+    options.hiddenMs != null
+      ? Number(options.hiddenMs)
+      : pageHiddenAt
+        ? Date.now() - pageHiddenAt
+        : 0
+  pageHiddenAt = 0
+
+  if (Number.isFinite(hiddenMs) && hiddenMs >= relockAfter) {
+    unlocked = false
+  }
+  ensureVoicesListener()
+  startResumeWatchdog()
+  if (canSpeak()) {
+    try {
+      window.speechSynthesis.resume()
+    } catch {
+      // ignore
+    }
+  }
+}

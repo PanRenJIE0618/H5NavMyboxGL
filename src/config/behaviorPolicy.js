@@ -52,6 +52,13 @@ export const DEFAULT_BEHAVIOR_POLICY = Object.freeze({
   voiceRate: 1,
   voiceLang: 'zh-CN',
 
+  /** 导航会话挂起恢复（sessionStorage） */
+  navSessionTtlMs: 7200000,
+  navSessionPersistThrottleMs: 15000,
+  navSessionPersistMinMeters: 50,
+  /** 挂起超过该时长回前台后需重新手势解锁语音 */
+  navVoiceRelockHiddenMs: 30000,
+
   /** 未导航时步行稳定朝向自动校正 */
   walk: Object.freeze({
     minStableMs: 6000,
@@ -176,6 +183,34 @@ export function normalizeBehaviorPolicy(patch, base = current) {
   if (p.voiceRate != null) next.voiceRate = clampNumber(p.voiceRate, base.voiceRate, 0.7, 1.5)
   if (typeof p.voiceLang === 'string' && p.voiceLang.trim()) {
     next.voiceLang = p.voiceLang.trim()
+  }
+
+  if (p.navSessionTtlMs != null) {
+    next.navSessionTtlMs = clampNumber(p.navSessionTtlMs, base.navSessionTtlMs, 60000, 86400000)
+  }
+  if (p.navSessionPersistThrottleMs != null) {
+    next.navSessionPersistThrottleMs = clampNumber(
+      p.navSessionPersistThrottleMs,
+      base.navSessionPersistThrottleMs,
+      1000,
+      300000,
+    )
+  }
+  if (p.navSessionPersistMinMeters != null) {
+    next.navSessionPersistMinMeters = clampNumber(
+      p.navSessionPersistMinMeters,
+      base.navSessionPersistMinMeters,
+      5,
+      2000,
+    )
+  }
+  if (p.navVoiceRelockHiddenMs != null) {
+    next.navVoiceRelockHiddenMs = clampNumber(
+      p.navVoiceRelockHiddenMs,
+      base.navVoiceRelockHiddenMs,
+      0,
+      600000,
+    )
   }
 
   if (p.walk != null) next.walk = normalizeWalk(p.walk, base.walk)

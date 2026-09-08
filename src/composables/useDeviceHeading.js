@@ -70,9 +70,22 @@ export function useDeviceHeading() {
     bound = false
   }
 
+  /** 已授权场景下重新挂监听（不弹权限框） */
+  function rebind() {
+    const Orientation = window.DeviceOrientationEvent
+    if (!Orientation) return false
+    if (typeof Orientation.requestPermission === 'function' && needsTap.value) {
+      return false
+    }
+    stop()
+    hasAbsolute = false
+    bind()
+    return true
+  }
+
   onUnmounted(stop)
 
-  return { heading, available, needsTap, error, start, stop }
+  return { heading, available, needsTap, error, start, stop, rebind }
 }
 
 function readHeading(event) {
