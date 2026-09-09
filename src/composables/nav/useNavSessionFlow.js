@@ -303,7 +303,7 @@ ctx.rebindNavRuntime = async function rebindNavRuntime({ hint = true } = {}) {
   }
   ctx.refreshMapSize()
   onNavVoicePageVisible({
-    hiddenMs: ctx.pageHiddenAt ? Date.now() - pageHiddenAt : 0,
+    hiddenMs: ctx.pageHiddenAt ? Date.now() - ctx.pageHiddenAt : 0,
   })
   if (hint) {
     locatingHint.value = t('hint.locateRestored')
@@ -324,7 +324,7 @@ ctx.onPageVisibilityChange = function onPageVisibilityChange() {
   }
   if (document.visibilityState !== 'visible') return
   onNavVoicePageVisible({
-    hiddenMs: ctx.pageHiddenAt ? Date.now() - pageHiddenAt : 0,
+    hiddenMs: ctx.pageHiddenAt ? Date.now() - ctx.pageHiddenAt : 0,
   })
   if (navigating.value) {
     void ctx.rebindNavRuntime({ hint: true })
