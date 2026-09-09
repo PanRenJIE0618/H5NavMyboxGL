@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js'
+
 export function canUseBrowserGeolocation() {
   return Boolean(navigator.geolocation) && isSecureGeolocationOrigin()
 }
@@ -27,15 +29,14 @@ export function getHttpsUrl() {
 export function getBrowserOpenHint() {
   if (isWeChatBrowser() && !canUseBrowserGeolocation()) {
     return {
-      title: '请用系统浏览器打开',
-      detail:
-        '当前环境无法在微信内可靠定位。请点右上角「···」→「在浏览器中打开」。',
+      title: t('gate.openBrowserTitle'),
+      detail: t('gate.openBrowserDetail'),
     }
   }
   if (!canUseBrowserGeolocation()) {
     return {
-      title: '需要 HTTPS 才能定位',
-      detail: `请用手机浏览器打开 ${getHttpsUrl()} 。推荐 Chrome / Safari / 百度浏览器。`,
+      title: t('gate.needHttpsTitle'),
+      detail: t('gate.needHttpsDetail', { url: getHttpsUrl() }),
     }
   }
   return null

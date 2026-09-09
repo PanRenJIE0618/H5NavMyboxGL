@@ -4,6 +4,7 @@
  */
 
 import { getBehaviorPolicy } from '../config/behaviorPolicy.js'
+import { getVoiceLang, t } from '../i18n/index.js'
 
 let muted = false
 let unlocked = false
@@ -23,7 +24,7 @@ function resolveOpts() {
   return {
     enabled: p.voiceEnabled !== false,
     rate: Number(p.voiceRate) || 1,
-    lang: p.voiceLang || 'zh-CN',
+    lang: getVoiceLang() || p.voiceLang || 'zh-CN',
     pitch: 1,
     volume: 1,
   }
@@ -33,11 +34,14 @@ function pickVoice(lang) {
   try {
     const voices = window.speechSynthesis.getVoices?.() || []
     if (!voices.length) return null
+    const wanted = String(lang || 'zh-CN')
+    const prefix = wanted.toLowerCase().slice(0, 2)
     return (
-      voices.find((v) => /zh-CN|zh_CN/i.test(v.lang)) ||
-      voices.find((v) => /Chinese|中文|普通话|粤语/i.test(v.name)) ||
-      voices.find((v) => String(v.lang).toLowerCase().startsWith('zh')) ||
-      voices.find((v) => String(v.lang).toLowerCase().startsWith(String(lang).slice(0, 2))) ||
+      voices.find((v) => String(v.lang).replace('_', '-') === wanted) ||
+      voices.find((v) => String(v.lang).toLowerCase().startsWith(prefix)) ||
+      voices.find((v) => /zh-CN|zh_CN|zh-TW|zh_TW|zh-HK/i.test(v.lang)) ||
+      voices.find((v) => /Chinese|中文|普通话|粤语|國語/i.test(v.name)) ||
+      voices[0] ||
       null
     )
   } catch {
@@ -231,15 +235,18 @@ export function speakNav(text, options = {}) {
 
 /** 开始导航概要 */
 export function speakNavOverview({ modeLabel, distanceText, durationText } = {}) {
-  const parts = [`开始${modeLabel || '导航'}`]
-  if (distanceText) parts.push(`全程约${distanceText}`)
-  if (durationText) parts.push(`预计${durationText}`)
-  return speakNav(parts.join('，'), { interrupt: true, dedupeMs: 0 })
+  const parts = [t('voice.startNav', { mode: modeLabel || t('voice.nav') })]
+  if (distanceText) parts.push(t('voice.distance', { distance: distanceText }))
+  if (durationText) parts.push(t('voice.duration', { duration: durationText }))
+  return speakNav(parts.join(getVoiceLang().startsWith('zh') ? '，' : ', '), {
+    interrupt: true,
+    dedupeMs: 0,
+  })
 }
 
 export function getNavVoiceSupportHint() {
   if (!canSpeak()) {
-    return '当前浏览器不支持语音播报，请用系统浏览器或 Chrome / Safari'
+    return t('voice.unsupported')
   }
   return ''
 }

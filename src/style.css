@@ -1696,15 +1696,61 @@ html[data-theme='contrast'] .mine-hero {
   letter-spacing: 0.04em;
 }
 
+.mine-card__hint {
+  margin: -4px 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--mist);
+  opacity: 0.85;
+}
+
 .mine-seg {
+  --seg-pad: 4px;
+  --seg-gap: 6px;
+  --seg-n: 3;
+  --seg-i: 0;
+  position: relative;
   display: flex;
-  gap: 6px;
-  padding: 4px;
+  gap: var(--seg-gap);
+  padding: var(--seg-pad);
   border-radius: 12px;
   background: var(--paper);
 }
 
+.mine-seg__thumb {
+  position: absolute;
+  z-index: 0;
+  top: var(--seg-pad);
+  bottom: var(--seg-pad);
+  left: var(--seg-pad);
+  width: calc(
+    (100% - (2 * var(--seg-pad)) - ((var(--seg-n) - 1) * var(--seg-gap))) / var(--seg-n)
+  );
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(16, 42, 58, 0.12);
+  transform: translate3d(calc(var(--seg-i) * (100% + var(--seg-gap))), 0, 0);
+  transition:
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.28s ease,
+    box-shadow 0.28s ease;
+  pointer-events: none;
+}
+
+html[data-theme='dark'] .mine-seg__thumb {
+  background: rgba(77, 141, 255, 0.16);
+  box-shadow: none;
+}
+
+html[data-theme='contrast'] .mine-seg__thumb {
+  outline: 2px solid #000;
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
 .mine-seg__btn {
+  position: relative;
+  z-index: 1;
   flex: 1 1 0;
   display: inline-flex;
   align-items: center;
@@ -1722,23 +1768,29 @@ html[data-theme='contrast'] .mine-hero {
   font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
+  transition:
+    color 0.28s ease,
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mine-seg__btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .mine-seg__btn.is-active {
-  background: var(--panel);
+  background: transparent;
   color: var(--ink);
-  box-shadow: 0 1px 4px rgba(16, 42, 58, 0.12);
+  box-shadow: none;
 }
 
 html[data-theme='dark'] .mine-seg__btn.is-active {
-  background: rgba(77, 141, 255, 0.16);
+  background: transparent;
   color: var(--ink);
   box-shadow: none;
 }
 
 html[data-theme='contrast'] .mine-seg__btn.is-active {
-  outline: 2px solid #000;
-  outline-offset: -2px;
+  outline: none;
 }
 
 .mine-seg__btn:disabled {
@@ -1752,6 +1804,11 @@ html[data-theme='contrast'] .mine-seg__btn.is-active {
   border-radius: 50%;
   border: 1px solid var(--line);
   flex: 0 0 auto;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mine-seg__btn.is-active .mine-seg__dot {
+  transform: scale(1.08);
 }
 
 .mine-seg__dot[data-preview='light'] {
@@ -1787,12 +1844,22 @@ html[data-theme='contrast'] .mine-seg__btn.is-active {
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
+  transition:
+    border-color 0.28s ease,
+    background 0.28s ease,
+    box-shadow 0.28s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mine-tile:active {
+  transform: scale(0.98);
 }
 
 .mine-tile.is-active {
   border-color: var(--navy);
   background: rgba(51, 112, 255, 0.08);
   box-shadow: 0 0 0 1px rgba(51, 112, 255, 0.2);
+  transform: translate3d(0, -1px, 0);
 }
 
 html[data-theme='dark'] .mine-tile.is-active {
@@ -1808,6 +1875,11 @@ html[data-theme='contrast'] .mine-tile.is-active {
   height: 36px;
   border-radius: 8px;
   border: 1px solid var(--line);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mine-tile.is-active .mine-tile__swatch {
+  transform: scale(1.02);
 }
 
 .mine-tile__swatch[data-basemap='vec'] {
@@ -1854,6 +1926,11 @@ html[data-theme='contrast'] .mine-tile.is-active {
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
+  transition: background 0.22s ease;
+}
+
+.mine-list__row:active {
+  background: rgba(51, 112, 255, 0.06);
 }
 
 .mine-list__row:last-child {
@@ -1873,7 +1950,9 @@ html[data-theme='contrast'] .mine-tile.is-active {
   font-weight: 700;
 }
 
-.mine-list__text small {
+.mine-list__text small,
+.mine-pref__meta small {
+  display: block;
   font-size: 12px;
   color: var(--mist);
 }
@@ -1892,6 +1971,7 @@ html[data-theme='contrast'] .mine-tile.is-active {
   gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+  transition: opacity 0.28s ease;
 }
 
 .mine-card--stack .mine-pref:first-child {
@@ -1907,17 +1987,13 @@ html[data-theme='contrast'] .mine-tile.is-active {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-height: 2.6em;
 }
 
 .mine-pref__meta strong {
   font-size: 14px;
   font-weight: 700;
   color: var(--ink);
-}
-
-.mine-pref__meta small {
-  font-size: 12px;
-  color: var(--mist);
 }
 
 .mine-more {
@@ -1933,6 +2009,15 @@ html[data-theme='contrast'] .mine-tile.is-active {
   font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
+  transition:
+    background 0.22s ease,
+    border-color 0.22s ease,
+    transform 0.18s ease;
+}
+
+.mine-more:active {
+  transform: scale(0.985);
+  background: rgba(51, 112, 255, 0.06);
 }
 
 .settings-switch__track {
@@ -1942,7 +2027,7 @@ html[data-theme='contrast'] .mine-tile.is-active {
   height: 28px;
   border-radius: 999px;
   background: rgba(16, 42, 58, 0.16);
-  transition: background 0.18s ease;
+  transition: background 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html[data-theme='dark'] .settings-switch__track {
@@ -1958,12 +2043,29 @@ html[data-theme='dark'] .settings-switch__track {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 4px rgba(16, 42, 58, 0.28);
-  transition: transform 0.18s ease;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html[data-theme='contrast'] .mine-list__row.is-on .settings-switch__track {
   outline: 2px solid #000;
   outline-offset: 1px;
+}
+
+.mine-caption-enter-active,
+.mine-caption-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.mine-caption-enter-from {
+  opacity: 0;
+  transform: translate3d(0, 4px, 0);
+}
+
+.mine-caption-leave-to {
+  opacity: 0;
+  transform: translate3d(0, -4px, 0);
 }
 
 .device-info {
@@ -2197,7 +2299,19 @@ html[data-theme='contrast'] .mine-list__row.is-on .settings-switch__track {
   .fade-scale-enter-active,
   .fade-scale-leave-active,
   .fade-row-enter-active,
-  .fade-row-leave-active {
+  .fade-row-leave-active,
+  .mine-seg__thumb,
+  .mine-seg__btn,
+  .mine-seg__dot,
+  .mine-tile,
+  .mine-tile__swatch,
+  .mine-list__row,
+  .mine-pref,
+  .mine-more,
+  .settings-switch__track,
+  .settings-switch__thumb,
+  .mine-caption-enter-active,
+  .mine-caption-leave-active {
     transition-duration: 0.01ms !important;
   }
 }

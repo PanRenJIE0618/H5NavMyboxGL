@@ -8,6 +8,7 @@ import {
 } from '../lib/navHistory'
 import { listRecommendPlaces, recommendToHistoryShape } from '../lib/recommendPlaces'
 import { formatDistance, formatDuration } from '../lib/geo'
+import { t } from '../i18n'
 
 const emit = defineEmits(['select', 'go-home'])
 
@@ -45,21 +46,21 @@ function onSelectRecommend(place) {
 <template>
   <div class="quick-page">
     <header class="quick-page__bar">
-      <h1 class="quick-page__title">快捷导航</h1>
+      <h1 class="quick-page__title">{{ t('quick.title') }}</h1>
       <button
         v-if="list.length"
         class="quick-page__clear"
         type="button"
         @click="onClear"
       >
-        清空历史
+        {{ t('quick.clear') }}
       </button>
     </header>
 
-    <p class="quick-page__hint">推荐点可一键设为目的地；历史来自结束导航后的记录。</p>
+    <p class="quick-page__hint">{{ t('quick.hint') }}</p>
 
     <section class="quick-section" aria-labelledby="quick-recommend-title">
-      <h2 id="quick-recommend-title" class="quick-section__title">推荐导航点</h2>
+      <h2 id="quick-recommend-title" class="quick-section__title">{{ t('quick.recommend') }}</h2>
       <div class="quick-list quick-list--tight">
         <button
           v-for="place in recommends"
@@ -75,15 +76,15 @@ function onSelectRecommend(place) {
             </strong>
             <small v-if="place.address" class="quick-card__addr">{{ place.address }}</small>
           </div>
-          <span class="quick-card__go" aria-hidden="true">前往</span>
+          <span class="quick-card__go" aria-hidden="true">{{ t('quick.go') }}</span>
         </button>
       </div>
     </section>
 
     <section class="quick-section" aria-labelledby="quick-history-title">
-      <h2 id="quick-history-title" class="quick-section__title">历史导航点</h2>
+      <h2 id="quick-history-title" class="quick-section__title">{{ t('quick.history') }}</h2>
 
-      <p v-if="!list.length" class="quick-page__empty">暂无导航记录，结束一次导航后会出现在这里</p>
+      <p v-if="!list.length" class="quick-page__empty">{{ t('quick.empty') }}</p>
 
       <div v-else class="quick-list">
         <button
@@ -94,12 +95,12 @@ function onSelectRecommend(place) {
           @click="onSelectHistory(item)"
         >
           <div class="quick-card__body">
-            <strong>{{ item.destination?.name || '目的地' }}</strong>
+            <strong>{{ item.destination?.name || t('quick.dest') }}</strong>
             <span>
-              {{ item.travelMode === 'walk' ? '步行' : '驾车' }}
+              {{ item.travelMode === 'walk' ? t('map.walk') : t('map.drive') }}
               · {{ formatDistance(item.distanceMeters) }}
               · {{ formatDuration(item.durationSeconds) }}
-              <template v-if="item.arrived"> · 已到达</template>
+              <template v-if="item.arrived"> · {{ t('quick.arrived') }}</template>
             </span>
             <small>{{ formatNavHistoryTime(item.endedAt || item.startedAt) }}</small>
             <small v-if="item.destination?.address" class="quick-card__addr">
@@ -110,11 +111,11 @@ function onSelectRecommend(place) {
             class="quick-card__remove"
             role="button"
             tabindex="0"
-            aria-label="删除该记录"
+            :aria-label="t('quick.removeAria')"
             @click="onRemove(item.id, $event)"
             @keydown.enter.prevent="onRemove(item.id, $event)"
           >
-            删除
+            {{ t('quick.remove') }}
           </span>
         </button>
       </div>

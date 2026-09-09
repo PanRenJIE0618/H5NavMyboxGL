@@ -1,4 +1,5 @@
 import { haversineMeters } from './geo.js'
+import { t } from '../i18n/index.js'
 
 const DRIVE_SPEED_MPS = 10
 const WALK_SPEED_MPS = 1.25
@@ -14,11 +15,11 @@ export const DRIVE_STYLES = [
 ]
 
 export function travelModeLabel(mode) {
-  return TRAVEL_MODES.find((item) => item.id === mode)?.label || '驾车'
+  return mode === 'walk' ? t('map.walk') : t('map.drive')
 }
 
 export function driveStyleLabel(style) {
-  return DRIVE_STYLES.find((item) => item.id === String(style))?.label || '最快路线'
+  return String(style) === '1' ? t('map.shortest') : t('map.fastest')
 }
 
 export async function planRoute(start, end, tk, driveStyle = '0') {
@@ -26,7 +27,7 @@ export async function planRoute(start, end, tk, driveStyle = '0') {
   const label = driveStyleLabel(style)
   const planned = await planWithHttp(start, end, tk, style)
   if (planned?.path?.length >= 2) return enrichPlan(planned, style)
-  throw new Error(`未能规划到${label}`)
+  throw new Error(t('hint.planFail', { label }))
 }
 
 /** 步行：起终点直线 + 步行时速（无 JS API 时） */

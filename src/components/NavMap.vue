@@ -64,6 +64,7 @@ import {
   isWeChatBrowser,
 } from '../lib/secureContext'
 import DevConsole from './DevConsole.vue'
+import { t, locale } from '../i18n'
 
 const props = defineProps({
   /** 页面是否处于前台展示（从设置返回时触发地图 resize） */
@@ -75,7 +76,15 @@ function toggleDebugConsole() {
   debugConsoleOpen.value = !debugConsoleOpen.value
 }
 
-const CARDINAL = ['北', '东北', '东', '东南', '南', '西南', '西', '西北']
+function travelModeBtnLabel(id) {
+  locale.value
+  return id === 'walk' ? t('map.walk') : t('map.drive')
+}
+
+function driveStyleBtnLabel(id) {
+  locale.value
+  return String(id) === '1' ? t('map.shortest') : t('map.fastest')
+}
 
 const mapEl = ref(null)
 const stageEl = ref(null)
@@ -84,7 +93,7 @@ const hudEl = ref(null)
 const mapReady = ref(false)
 const mapError = ref('')
 const address = ref('')
-const locatingHint = ref('正在获取当前位置…')
+const locatingHint = ref(t('hint.locating'))
 const keyword = ref('')
 const searching = ref(false)
 const searchError = ref('')
@@ -209,11 +218,9 @@ const walkHeadingBehavior = createDeviceWalkBehavior(() => ({
   ...getBehaviorPolicy().walk,
   onCorrect(deg) {
     walkHeadingActive.value = true
-    locatingHint.value = `已按行进方向校正地图朝向 · ${deg.toFixed(0)}°`
+    locatingHint.value = t('hint.walkCorrect', { deg: deg.toFixed(0) })
     window.setTimeout(() => {
-      if (String(locatingHint.value).startsWith('已按行进方向校正')) {
-        locatingHint.value = ''
-      }
+      locatingHint.value = ''
     }, 2200)
   },
   onRelease() {
@@ -545,14 +552,26 @@ function syncBeaconHeading() {
 }
 
 const headingText = computed(() => {
+  locale.value
   if (!headingAvailable.value || deviceHeading.value == null) return '—'
   const deg = deviceHeading.value
   const idx = Math.round(deg / 45) % 8
-  return `${CARDINAL[idx]} ${deg.toFixed(0)}°`
+  const labels = [
+    t('cardinal.n'),
+    t('cardinal.ne'),
+    t('cardinal.e'),
+    t('cardinal.se'),
+    t('cardinal.s'),
+    t('cardinal.sw'),
+    t('cardinal.w'),
+    t('cardinal.nw'),
+  ]
+  return `${labels[idx]} ${deg.toFixed(0)}°`
 })
 
 const coordText = computed(() => {
-  if (lng.value == null || lat.value == null) return '等待定位'
+  locale.value
+  if (lng.value == null || lat.value == null) return t('map.waitingLocate')
   return `${lng.value.toFixed(6)}, ${lat.value.toFixed(6)}`
 })
 
@@ -589,12 +608,13 @@ const speedDisplay = computed(() => {
 })
 
 const offRouteBannerText = computed(() => {
-  if (rerouting.value) return '正在按当前位置重新规划路线…'
+  locale.value
+  if (rerouting.value) return t('hint.reroutingNow')
   const d = offRouteDistanceMeters.value
   if (Number.isFinite(d) && d > 0) {
-    return `已偏离规划路线约 ${formatDistance(d)}`
+    return t('hint.offRouteAbout', { distance: formatDistance(d) })
   }
-  return '已偏离规划路线，可重新规划'
+  return t('hint.offRouteCanReplan')
 })
 
 const overlayStyle = computed(() => ({
@@ -612,9 +632,12 @@ watch(isSpeeding, (over) => {
   const now = Date.now()
   if (now - lastSpeedingAlertAt < 8000) return
   lastSpeedingAlertAt = now
-  locatingHint.value = `超速提醒 · 当前 ${speedDisplay.value} km/h，限速 ${speedLimitKmh.value} km/h`
+  locatingHint.value = t('hint.speeding', {
+    speed: speedDisplay.value,
+    limit: speedLimitKmh.value,
+  })
   window.setTimeout(() => {
-    if (String(locatingHint.value).startsWith('超速提醒')) locatingHint.value = ''
+    locatingHint.value = ''
   }, 2800)
   try {
     navigator.vibrate?.(120)
@@ -624,30 +647,38 @@ watch(isSpeeding, (over) => {
 })
 
 const statusText = computed(() => {
-  if (arrived.value) return '已到达目的地'
-  if (rerouting.value) return '已偏航，正在重新规划'
-  if (navigating.value && offRoute.value) return '已偏航，偏离规划路线'
+  locale.value
+  if (arrived.value) return t('hint.arrivedDest')
+  if (rerouting.value) return t('hint.offRouteReplanning')
+  if (navigating.value && offRoute.value) return t('hint.offRouteStatus')
   if (navigating.value) {
-    const parts = ['导航中']
-    if (remainingMeters.value != null) parts.push(`剩余 ${formatDistance(remainingMeters.value)}`)
+    const parts = [t('map.navigating')]
+    if (remainingMeters.value != null) {
+      parts.push(t('hint.remainDist', { distance: formatDistance(remainingMeters.value) }))
+    }
     if (remainingSeconds.value != null) parts.push(formatDuration(remainingSeconds.value))
     return parts.join(' · ')
   }
-  if (routing.value) return '正在规划路线…'
+  if (routing.value) return t('hint.planning')
   if (locatingHint.value) return locatingHint.value
   if (error.value) return error.value
   if (watching.value && lng.value != null) {
-    if (followUser.value) return '定位跟踪中 · 视角跟随'
-    return navigating.value ? '导航中' : '定位跟踪中'
+    if (followUser.value) return t('map.trackingFollow')
+    return navigating.value ? t('map.navigating') : t('map.tracking')
   }
   return ''
 })
 
 const hudTitle = computed(() => {
-  if (arrived.value && destination.value) return `已到达 ${destination.value.name}`
-  if (navigating.value && destination.value) return `前往 ${destination.value.name}`
+  locale.value
+  if (arrived.value && destination.value) {
+    return t('map.arrived', { name: destination.value.name })
+  }
+  if (navigating.value && destination.value) {
+    return t('map.goingTo', { name: destination.value.name })
+  }
   if (destination.value) return destination.value.name
-  return address.value || (loading.value ? '地址解析中' : '尚未获取地址')
+  return address.value || (loading.value ? t('map.addrParsing') : t('map.noAddress'))
 })
 
 /** 搜索结果展开时隐藏底部地址卡，避免与顶部结果列表重叠 */
@@ -656,10 +687,11 @@ const showSearchPanel = computed(
 )
 
 const routeSummary = computed(() => {
+  locale.value
   if (!routeInfo.value) return ''
   const mode = `${travelModeLabel(routeInfo.value.mode || travelMode.value)} · ${
     (routeInfo.value.mode || travelMode.value) === 'walk'
-      ? '步行路线'
+      ? t('map.walkRoute')
       : driveStyleLabel(routeInfo.value.style)
   }`
   // 导航中剩余里程/时间已在顶部 status 展示，此处不再重复
@@ -889,8 +921,8 @@ function applyMapThemeStyle(theme) {
 async function initMap() {
   try {
     const mapboxgl = window.mapboxgl
-    if (!mapboxgl) throw new Error('Mapbox GL 未加载')
-    if (!mapEl.value) throw new Error('地图容器未就绪')
+    if (!mapboxgl) throw new Error(t('map.mapboxMissing'))
+    if (!mapEl.value) throw new Error(t('map.containerMissing'))
 
     const { baseTiles, labelTiles } = basemapTileUrls(getStoredBasemap())
 
@@ -976,7 +1008,7 @@ async function initMap() {
     maybeOfferResumeSession()
     await locateOnce(true)
   } catch (err) {
-    mapError.value = err.message || '地图初始化失败'
+    mapError.value = err.message || t('map.mapInitFail')
   }
 }
 
@@ -1052,9 +1084,9 @@ function togglePitch3D() {
     duration: 420,
     essential: true,
   })
-  locatingHint.value = pitch3D.value ? '已切换到 3D 视角' : '已切换到 2D 平面'
+  locatingHint.value = pitch3D.value ? t('hint.pitch3d') : t('hint.pitch2d')
   window.setTimeout(() => {
-    if (locatingHint.value.startsWith('已切换到')) locatingHint.value = ''
+    locatingHint.value = ''
   }, 1600)
 }
 
@@ -1068,7 +1100,7 @@ async function locateOnce(isFirst = false) {
     }
     return
   }
-  locatingHint.value = isFirst ? '正在获取当前位置…' : '正在重新定位…'
+  locatingHint.value = isFirst ? t('hint.locating') : t('hint.relocating')
   if (!isFirst) startHeading(true)
 
   const targetZoom = resolveMaxZoom()
@@ -1092,8 +1124,8 @@ async function locateOnce(isFirst = false) {
       animate: !isFirst,
       forceCenter: true,
     })
-    address.value = '正在解析地址…'
-    address.value = (await reverseGeocode(pos.lng, pos.lat, TIANDITU_TK)) || '地址解析暂不可用'
+    address.value = t('hint.parsingAddr')
+    address.value = (await reverseGeocode(pos.lng, pos.lat, TIANDITU_TK)) || t('hint.addrUnavailable')
     locatingHint.value = ''
     refreshMapSize()
     pinCamera(pos, targetZoom, { animate: false })
@@ -1101,7 +1133,7 @@ async function locateOnce(isFirst = false) {
     syncMapBearingTarget()
     applyHeadingDragLock()
   } catch (err) {
-    locatingHint.value = err?.message || error.value || '重新定位失败'
+    locatingHint.value = err?.message || error.value || t('hint.locateFail')
   } finally {
     try {
       await watchLocation(onLocationTick)
@@ -1186,10 +1218,10 @@ function syncMapBearingTarget() {
 }
 
 async function testRotateByHeading() {
-  locatingHint.value = '正在读取朝向…'
+  locatingHint.value = t('hint.headingReading')
   const ok = await startHeading(true)
   if (!ok && deviceHeading.value == null) {
-    locatingHint.value = '无法读取朝向，请授权传感器后重试'
+    locatingHint.value = t('hint.headingFail')
     return
   }
 
@@ -1201,9 +1233,9 @@ async function testRotateByHeading() {
       bearingRaf = 0
     }
     applyHeadingDragLock()
-    locatingHint.value = '已关闭朝向锁定'
+    locatingHint.value = t('hint.headingOff')
     window.setTimeout(() => {
-      if (locatingHint.value === '已关闭朝向锁定') locatingHint.value = ''
+      locatingHint.value = ''
     }, 1600)
     return
   }
@@ -1211,16 +1243,16 @@ async function testRotateByHeading() {
   const courseDeg = resolveCourseDeg()
   if (courseDeg == null) {
     headingTestLock.value = false
-    locatingHint.value = '暂无朝向数据'
+    locatingHint.value = t('hint.headingNone')
     return
   }
 
   bearingTargetDeg = courseDeg
   ensureBearingLoop()
   applyHeadingDragLock()
-  locatingHint.value = `相机方向 · ${courseDeg.toFixed(0)}°`
+  locatingHint.value = t('hint.cameraDir', { deg: courseDeg.toFixed(0) })
   window.setTimeout(() => {
-    if (String(locatingHint.value).startsWith('相机方向')) locatingHint.value = ''
+    locatingHint.value = ''
   }, 2000)
 }
 
@@ -1363,9 +1395,9 @@ function applyNavCamera(pos, opts = {}) {
 async function copyOpenUrl() {
   try {
     await navigator.clipboard.writeText(httpsUrl)
-    locatingHint.value = '链接已复制，请粘贴到系统浏览器打开'
+    locatingHint.value = t('hint.copyOk')
   } catch {
-    locatingHint.value = `请手动复制：${httpsUrl}`
+    locatingHint.value = t('hint.copyManual', { url: httpsUrl })
   }
 }
 
@@ -1433,10 +1465,10 @@ async function onSearch() {
   try {
     const around = lng.value != null ? { lng: lng.value, lat: lat.value } : null
     places.value = await searchPlaces(keyword.value, around, TIANDITU_TK)
-    if (!places.value.length) searchError.value = '没有找到匹配地点，请换个关键词'
+    if (!places.value.length) searchError.value = t('map.searchEmpty')
   } catch (err) {
     places.value = []
-    searchError.value = err.message || '搜索失败'
+    searchError.value = err.message || t('map.searchFail')
   } finally {
     searching.value = false
   }
@@ -1456,7 +1488,7 @@ function beginNavHistoryMeta() {
     id: `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
     startedAt: Date.now(),
     destination: {
-      name: destination.value.name || '目的地',
+      name: destination.value.name || t('map.destination'),
       lng: Number(destination.value.lng),
       lat: Number(destination.value.lat),
       address: destination.value.address || '',
@@ -1511,7 +1543,7 @@ async function selectPlace(place) {
   const lngNum = Number(place.lng)
   const latNum = Number(place.lat)
   if (!Number.isFinite(lngNum) || !Number.isFinite(latNum)) {
-    searchError.value = '该结果没有有效坐标，请换一个地点'
+    searchError.value = t('map.invalidCoords')
     return
   }
 
@@ -1566,8 +1598,8 @@ async function selectPlace(place) {
 async function onNavigateClick() {
   if (!destination.value || routing.value || navigating.value) return
   // 移动端：必须在任何 await 之前解锁语音（用户手势）
-  unlockNavVoice({ primingText: '开始导航' })
-  locatingHint.value = '正在规划路线…'
+  unlockNavVoice({ primingText: t('voice.unlockStart') })
+  locatingHint.value = t('hint.planning')
   const ok = await prepareDualRoutes({ previewDual: false })
   if (ok) await startNavigation()
   else if (!searchError.value) locatingHint.value = ''
@@ -1576,12 +1608,12 @@ async function onNavigateClick() {
 async function onRouteClick() {
   if (!destination.value || routing.value || navigating.value) return
   unlockNavVoice()
-  locatingHint.value = '正在规划路线…'
+  locatingHint.value = t('hint.planning')
   const ok = await prepareDualRoutes({ previewDual: true })
   if (ok) {
-    locatingHint.value = '路线已就绪，可选择方案后开始导航'
+    locatingHint.value = t('hint.routeReady')
     window.setTimeout(() => {
-      if (locatingHint.value.startsWith('路线已就绪')) locatingHint.value = ''
+      locatingHint.value = ''
     }, 2200)
   } else if (!searchError.value) {
     locatingHint.value = ''
@@ -1610,14 +1642,14 @@ async function prepareDualRoutes({ previewDual = true } = {}) {
       lat: Number(destination.value.lat),
     }
     if (!Number.isFinite(end.lng) || !Number.isFinite(end.lat)) {
-      throw new Error('目的地坐标无效')
+      throw new Error(t('map.invalidDest'))
     }
 
     const plans = {}
 
     if (travelMode.value === 'walk') {
       const walked = await planByTravelMode(start, end, TIANDITU_TK, 'walk')
-      if (!walked?.path?.length) throw new Error('没有找到步行路线')
+      if (!walked?.path?.length) throw new Error(t('map.noWalkRoute'))
       plans.walk = walked
       driveStyle.value = 'walk'
       routePlans.value = plans
@@ -1638,7 +1670,7 @@ async function prepareDualRoutes({ previewDual = true } = {}) {
 
       if (!Object.keys(plans).length) {
         throw new Error(
-          results.find((item) => item.status === 'rejected')?.reason?.message || '路线规划失败',
+          results.find((item) => item.status === 'rejected')?.reason?.message || t('hint.routeFail'),
         )
       }
 
@@ -1673,7 +1705,7 @@ async function prepareDualRoutes({ previewDual = true } = {}) {
     routesReady.value = false
     routePlans.value = {}
     routeInfo.value = null
-    searchError.value = err.message || '路线规划失败'
+    searchError.value = err.message || t('hint.routeFail')
     locatingHint.value = searchError.value
     clearAllRouteLines()
     return false
@@ -1749,15 +1781,15 @@ async function startNavigation() {
   const courseDeg = resolveCourseDeg()
   if (courseDeg != null) lastGoodBearing = courseDeg
   applyNavCamera({ lng: lng.value, lat: lat.value }, { snapBearing: true })
-  locatingHint.value = '导航中 · 视角跟随已开启'
+  locatingHint.value = t('hint.navFollow')
   window.setTimeout(() => {
-    if (locatingHint.value.startsWith('导航中 · 视角跟随')) locatingHint.value = ''
+    locatingHint.value = ''
   }, 1800)
 
   const hint = getNavVoiceSupportHint()
   if (hint) locatingHint.value = hint
 
-  const modeLabel = travelMode.value === 'walk' ? '步行导航' : '驾车导航'
+  const modeLabel = travelMode.value === 'walk' ? t('voice.walkNav') : t('voice.driveNav')
   speakNavOverview({
     modeLabel,
     distanceText: formatDistance(routeInfo.value.distanceMeters),
@@ -1778,13 +1810,13 @@ async function startNavigation() {
     clearNavSession()
     activeNavMeta = null
     stopNavVoice()
-    locatingHint.value = err?.message || '无法持续定位，导航已取消'
+    locatingHint.value = err?.message || t('hint.navCancelLocate')
   }
 }
 
 /** 按钮点击同步解锁语音，再进入异步导航流程 */
 function onStartNavClick() {
-  unlockNavVoice({ primingText: '开始导航' })
+  unlockNavVoice({ primingText: t('voice.unlockStart') })
   void startNavigation()
 }
 
@@ -1829,7 +1861,7 @@ async function rebindNavRuntime({ hint = true } = {}) {
   try {
     await restartWatch(onLocationTick)
   } catch (err) {
-    locatingHint.value = err?.message || '无法恢复定位，请检查权限后重试'
+    locatingHint.value = err?.message || t('hint.resumeLocateFail')
     return false
   }
   rebindHeading()
@@ -1846,9 +1878,9 @@ async function rebindNavRuntime({ hint = true } = {}) {
     hiddenMs: pageHiddenAt ? Date.now() - pageHiddenAt : 0,
   })
   if (hint) {
-    locatingHint.value = '定位已恢复'
+    locatingHint.value = t('hint.locateRestored')
     window.setTimeout(() => {
-      if (locatingHint.value === '定位已恢复') locatingHint.value = ''
+      locatingHint.value = ''
     }, 1500)
   }
   return true
@@ -1977,10 +2009,10 @@ function discardClipboardOffer() {
 async function confirmClipboardOffer() {
   const offer = clipboardOffer.value
   if (!offer?.query || routing.value || navigating.value) return
-  unlockNavVoice({ primingText: '开始导航' })
+  unlockNavVoice({ primingText: t('voice.unlockStart') })
   dismissedClipboardFp = offer.fingerprint || ''
   clipboardOffer.value = null
-  locatingHint.value = '正在识别剪贴板地址…'
+  locatingHint.value = t('hint.clipboardRecognizing')
 
   try {
     let place = null
@@ -1990,7 +2022,7 @@ async function confirmClipboardOffer() {
       Number.isFinite(Number(offer.lat))
     ) {
       place = {
-        name: '剪贴板坐标',
+        name: t('map.clipboardCoord'),
         address: offer.query,
         lng: Number(offer.lng),
         lat: Number(offer.lat),
@@ -2005,19 +2037,19 @@ async function confirmClipboardOffer() {
     }
 
     if (!place) {
-      locatingHint.value = '未找到该地址，请手动搜索'
+      locatingHint.value = t('hint.clipboardNotFound')
       keyword.value = offer.query
       return
     }
 
     keyword.value = place.name || offer.query
     await selectPlace(place)
-    locatingHint.value = '正在规划路线…'
+    locatingHint.value = t('hint.planning')
     const ok = await prepareDualRoutes({ previewDual: false })
     if (ok) await startNavigation()
-    else if (!searchError.value) locatingHint.value = '路线规划失败'
+    else if (!searchError.value) locatingHint.value = t('hint.routeFail')
   } catch (err) {
-    locatingHint.value = err?.message || '剪贴板导航失败'
+    locatingHint.value = err?.message || t('hint.clipboardNavFail')
   }
 }
 
@@ -2031,27 +2063,27 @@ function maybeOfferResumeSession() {
 function discardResumeSession() {
   clearNavSession()
   pendingResume.value = null
-  locatingHint.value = '已放弃未完成的导航'
+  locatingHint.value = t('hint.resumeDiscarded')
   window.setTimeout(() => {
-    if (locatingHint.value === '已放弃未完成的导航') locatingHint.value = ''
+    locatingHint.value = ''
   }, 1600)
 }
 
 async function confirmResumeSession() {
   const session = pendingResume.value
   if (!session) return
-  unlockNavVoice({ primingText: '继续导航' })
+  unlockNavVoice({ primingText: t('voice.unlockContinue') })
   pendingResume.value = null
 
   const path = coordsToPath(session.route?.path || [])
   if (path.length < 2) {
     clearNavSession()
-    locatingHint.value = '会话路线无效，已清除'
+    locatingHint.value = t('hint.sessionInvalid')
     return
   }
 
   destination.value = {
-    name: session.destination.name || '目的地',
+    name: session.destination.name || t('map.destination'),
     lng: Number(session.destination.lng),
     lat: Number(session.destination.lat),
     address: session.destination.address || '',
@@ -2098,9 +2130,9 @@ async function confirmResumeSession() {
   beginNavHistoryMeta()
 
   const ok = await rebindNavRuntime({ hint: false })
-  locatingHint.value = ok ? '已继续导航' : locatingHint.value || '导航已恢复，定位待重试'
+  locatingHint.value = ok ? t('hint.resumeOk') : locatingHint.value || t('hint.resumePartial')
   window.setTimeout(() => {
-    if (locatingHint.value === '已继续导航') locatingHint.value = ''
+    locatingHint.value = ''
   }, 1800)
 }
 
@@ -2121,7 +2153,7 @@ function stopNavigation(opts = {}) {
   walkHeadingBehavior.reset('stop-nav')
   walkHeadingActive.value = false
   if (opts.announceArrive) {
-    speakNav('已到达目的地', { interrupt: true, dedupeMs: 0 })
+    speakNav(t('voice.arrived'), { interrupt: true, dedupeMs: 0 })
   } else {
     stopNavVoice()
   }
@@ -2210,14 +2242,14 @@ function onNavUpdate(pos) {
 function toggleVoiceMute() {
   // 开启语音时必须在点击手势内解锁
   if (voiceMuted.value) {
-    unlockNavVoice({ primingText: '语音已开启' })
+    unlockNavVoice({ primingText: t('voice.unlockOn') })
   }
   const nextMuted = toggleNavVoiceMuted()
   voiceMuted.value = nextMuted
   setVoiceEnabled(!nextMuted)
-  locatingHint.value = voiceMuted.value ? '语音播报已关闭' : '语音播报已开启'
+  locatingHint.value = voiceMuted.value ? t('hint.voiceOff') : t('hint.voiceOn')
   window.setTimeout(() => {
-    if (locatingHint.value.startsWith('语音播报')) locatingHint.value = ''
+    locatingHint.value = ''
   }, 1600)
 }
 
@@ -2230,13 +2262,13 @@ function applyNavPrefs(next) {
 
 async function onRerouteClick() {
   if (!navigating.value || rerouting.value) return
-  unlockNavVoice({ primingText: '重新规划' })
+  unlockNavVoice({ primingText: t('voice.unlockReplan') })
   const current =
     lng.value != null && lat.value != null
       ? { lng: Number(lng.value), lat: Number(lat.value) }
       : null
   if (!current || !Number.isFinite(current.lng) || !Number.isFinite(current.lat)) {
-    locatingHint.value = '暂无定位，无法重新规划'
+    locatingHint.value = t('hint.noLocateReplan')
     return
   }
   await rerouteAfterYaw(current)
@@ -2246,8 +2278,8 @@ async function rerouteAfterYaw(current) {
   if (rerouting.value || !destination.value) return
   rerouting.value = true
   offRouteMonitor.markRerouteStarted()
-  nextGuide.value = '已偏航，正在按当前位置重新规划'
-  speakNav('已偏离规划路线，正在重新规划', { interrupt: true, dedupeMs: 0 })
+  nextGuide.value = t('hint.rerouteGuide')
+  speakNav(t('hint.rerouteSpeak'), { interrupt: true, dedupeMs: 0 })
   try {
     // 预留后端：replanHook 返回有效路线则优先使用
     let planned = null
@@ -2274,7 +2306,7 @@ async function rerouteAfterYaw(current) {
     routePlans.value = { ...routePlans.value, [driveStyle.value]: planned }
     remainingMeters.value = planned.distanceMeters
     remainingSeconds.value = planned.durationSeconds
-    nextGuide.value = planned.guides?.[0]?.text || '已重新规划路线'
+    nextGuide.value = planned.guides?.[0]?.text || t('hint.rerouteDone')
     speakNav(nextGuide.value, { interrupt: false, dedupeMs: 0 })
     lastDrawnRemainMeters = null
     clearIdleRouteLines()
@@ -2290,7 +2322,7 @@ async function rerouteAfterYaw(current) {
       activeNavMeta.travelMode = travelMode.value === 'walk' ? 'walk' : 'drive'
     }
   } catch (err) {
-    nextGuide.value = err.message || '重新规划失败，请靠近原路线'
+    nextGuide.value = err.message || t('hint.rerouteFail')
     speakNav(nextGuide.value, { interrupt: true, dedupeMs: 0 })
   } finally {
     rerouting.value = false
@@ -2308,7 +2340,7 @@ function setDestMarker(place) {
   const el = document.createElement('div')
   el.className = 'dest-marker'
   el.innerHTML =
-    '<div class="dest-marker__pin"></div><div class="dest-marker__label">目的地</div>'
+    `<div class="dest-marker__pin"></div><div class="dest-marker__label">${t('map.destMarker')}</div>`
   destMarker = new window.mapboxgl.Marker({ element: el, anchor: 'bottom' })
     .setLngLat([lng, lat])
     .addTo(map)
@@ -2689,7 +2721,7 @@ watch(
 
 watch(offRoute, (over, prev) => {
   if (!navigating.value || !over || prev || rerouting.value) return
-  speakNav('已偏离规划路线', { interrupt: false })
+  speakNav(t('voice.offRoute'), { interrupt: false })
 })
 
 onMounted(() => {
@@ -2784,15 +2816,12 @@ onUnmounted(() => {
     <div v-if="showWeChatGate" class="browser-gate" role="dialog" aria-modal="true">
       <Transition name="fade-scale" appear>
         <div class="browser-gate__card">
-          <p class="browser-gate__kicker">微信内置浏览器</p>
-          <h2>无法在此打开本页</h2>
-          <p>
-            当前不是可在微信内使用的正式 HTTPS 环境。
-            请点右上角 <strong>···</strong> → <strong>在浏览器中打开</strong>。
-          </p>
+          <p class="browser-gate__kicker">{{ t('gate.kicker') }}</p>
+          <h2>{{ t('gate.title') }}</h2>
+          <p>{{ t('gate.body') }}</p>
           <p class="browser-gate__url">{{ httpsUrl }}</p>
-          <button class="browser-gate__btn" type="button" @click="copyOpenUrl">复制链接</button>
-          <p class="browser-gate__hint">推荐：系统浏览器 / Chrome / Safari / 百度浏览器</p>
+          <button class="browser-gate__btn" type="button" @click="copyOpenUrl">{{ t('gate.copy') }}</button>
+          <p class="browser-gate__hint">{{ t('gate.hint') }}</p>
         </div>
       </Transition>
     </div>
@@ -2803,24 +2832,24 @@ onUnmounted(() => {
         <div class="mast__row">
           <div class="mast__copy">
             <div class="mast__title">
-              <h1>现场定位</h1>
+              <h1>{{ t('map.title') }}</h1>
               <button
                 class="mast__log"
                 type="button"
                 :class="{ 'is-on': debugConsoleOpen }"
                 @click="toggleDebugConsole"
               >
-                {{ debugConsoleOpen ? '收起' : '日志' }}
+                {{ debugConsoleOpen ? t('map.logClose') : t('map.log') }}
               </button>
             </div>
           </div>
-          <div class="mast__heading" aria-label="设备朝向">
+          <div class="mast__heading" :aria-label="t('map.headingAria')">
             <span
               class="mast__needle"
               :class="{ 'is-live': headingAvailable }"
               :style="{ transform: `rotate(${compassRotate}deg)` }"
             />
-            <small>{{ headingAvailable ? headingText : '无朝向' }}</small>
+            <small>{{ headingAvailable ? headingText : t('map.noHeading') }}</small>
           </div>
         </div>
         <form class="search" @submit.prevent="onSearch">
@@ -2829,18 +2858,18 @@ onUnmounted(() => {
             class="search__input"
             type="search"
             enterkeyhint="search"
-            placeholder="搜索地址或地点"
+            :placeholder="t('map.searchPlaceholder')"
             :disabled="!mapReady || navigating"
           />
           <button class="search__btn" type="submit" :disabled="!mapReady || searching || navigating">
-            {{ searching ? '搜索中' : '搜索' }}
+            {{ searching ? t('map.searching') : t('map.search') }}
           </button>
         </form>
         <Transition name="panel-drop">
           <div v-if="showSearchPanel" class="search-panel">
             <div class="search-panel__bar">
-              <span>{{ searchError ? '搜索提示' : `找到 ${places.length} 条结果` }}</span>
-              <button class="search-panel__close" type="button" @click="closeSearchPanel">关闭</button>
+              <span>{{ searchError ? t('map.searchTip') : t('map.foundResults', { n: places.length }) }}</span>
+              <button class="search-panel__close" type="button" @click="closeSearchPanel">{{ t('map.close') }}</button>
             </div>
             <p v-if="searchError" class="search-panel__error">{{ searchError }}</p>
             <button
@@ -2851,7 +2880,7 @@ onUnmounted(() => {
               @click.stop="selectPlace(place)"
             >
               <strong>{{ place.name }}</strong>
-              <span>{{ place.suggest ? '相关搜索' : place.address || `${place.lng.toFixed(4)}, ${place.lat.toFixed(4)}` }}</span>
+              <span>{{ place.suggest ? t('map.suggestSearch') : place.address || `${place.lng.toFixed(4)}, ${place.lat.toFixed(4)}` }}</span>
             </button>
           </div>
         </Transition>
@@ -2864,20 +2893,20 @@ onUnmounted(() => {
           role="status"
         >
           <div class="resume-banner__body">
-            <strong>继续导航？</strong>
+            <strong>{{ t('banner.resumeTitle') }}</strong>
             <span>
-              检测到未完成的导航：前往 {{ pendingResume.destination?.name || '目的地' }}
+              {{ t('banner.resumeBody', { name: pendingResume.destination?.name || t('map.destination') }) }}
               <template v-if="pendingResume.remainingMeters != null">
-                · 剩余约 {{ formatDistance(pendingResume.remainingMeters) }}
+                {{ t('banner.resumeRemain', { distance: formatDistance(pendingResume.remainingMeters) }) }}
               </template>
             </span>
           </div>
           <div class="resume-banner__actions">
             <button class="resume-banner__btn resume-banner__btn--ghost" type="button" @click="discardResumeSession">
-              放弃
+              {{ t('banner.discard') }}
             </button>
             <button class="resume-banner__btn" type="button" @click="confirmResumeSession">
-              继续导航
+              {{ t('banner.continue') }}
             </button>
           </div>
         </div>
@@ -2890,12 +2919,12 @@ onUnmounted(() => {
           role="status"
         >
           <div class="resume-banner__body">
-            <strong>前往剪贴板地点？</strong>
-            <span>检测到地址：{{ clipboardOffer.preview }}</span>
+            <strong>{{ t('banner.clipboardTitle') }}</strong>
+            <span>{{ t('banner.clipboardBody', { preview: clipboardOffer.preview }) }}</span>
           </div>
           <div class="resume-banner__actions">
             <button class="resume-banner__btn resume-banner__btn--ghost" type="button" @click="discardClipboardOffer">
-              忽略
+              {{ t('banner.ignore') }}
             </button>
             <button
               class="resume-banner__btn"
@@ -2903,7 +2932,7 @@ onUnmounted(() => {
               :disabled="routing"
               @click="confirmClipboardOffer"
             >
-              {{ routing ? '规划中…' : '前往并导航' }}
+              {{ routing ? t('banner.replanning') : t('banner.goNav') }}
             </button>
           </div>
         </div>
@@ -2916,7 +2945,7 @@ onUnmounted(() => {
           role="alert"
         >
           <div class="offroute-banner__body">
-            <strong>{{ rerouting ? '偏航重规划' : '已偏航' }}</strong>
+            <strong>{{ rerouting ? t('banner.rerouting') : t('banner.offRoute') }}</strong>
             <span>{{ offRouteBannerText }}</span>
           </div>
           <button
@@ -2925,7 +2954,7 @@ onUnmounted(() => {
             :disabled="rerouting"
             @click="onRerouteClick"
           >
-            {{ rerouting ? '规划中…' : '重新规划' }}
+            {{ rerouting ? t('banner.replanning') : t('banner.replan') }}
           </button>
         </div>
       </Transition>
@@ -2941,16 +2970,16 @@ onUnmounted(() => {
           role="status"
           :aria-label="
             speedKmh == null
-              ? '测速暂无数据'
+              ? t('map.speedNone')
               : isSpeeding
-                ? `超速 ${speedDisplay} 公里每小时`
-                : `当前速度 ${speedDisplay} 公里每小时`
+                ? t('map.speedOver', { n: speedDisplay })
+                : t('map.speedNow', { n: speedDisplay })
           "
-          :title="`限速 ${speedLimitKmh} km/h`"
+          :title="t('map.limitSpeed', { n: speedLimitKmh })"
         >
           <strong class="map-speed__value">{{ speedDisplay }}</strong>
           <span class="map-speed__unit">km/h</span>
-          <span v-if="isSpeeding" class="map-speed__tag">超速</span>
+          <span v-if="isSpeeding" class="map-speed__tag">{{ t('map.speeding') }}</span>
         </div>
       </Transition>
       <Transition name="fade-pop">
@@ -2961,7 +2990,7 @@ onUnmounted(() => {
           :aria-valuenow="navRemainPercent"
           aria-valuemin="0"
           aria-valuemax="100"
-          :aria-label="`剩余路程 ${navRemainPercent}%`"
+          :aria-label="t('map.remainPct', { n: navRemainPercent })"
         >
           <div class="nav-progress__rail">
             <div
@@ -2976,7 +3005,7 @@ onUnmounted(() => {
           v-if="mapReady && !navigating"
           class="map-travel"
           role="group"
-          aria-label="出行方式"
+          :aria-label="t('map.travelMode')"
         >
           <button
             v-for="item in TRAVEL_MODES"
@@ -2987,7 +3016,7 @@ onUnmounted(() => {
             :disabled="routing"
             @click="setTravelMode(item.id)"
           >
-            {{ item.label }}
+            {{ travelModeBtnLabel(item.id) }}
           </button>
         </div>
       </Transition>
@@ -2998,18 +3027,18 @@ onUnmounted(() => {
           class="map-fab map-voice"
           type="button"
           :class="{ 'is-muted': voiceMuted }"
-          :aria-label="voiceMuted ? '开启语音播报' : '关闭语音播报'"
-          :title="voiceMuted ? '开启语音' : '静音'"
+          :aria-label="voiceMuted ? t('map.voiceOn') : t('map.voiceOff')"
+          :title="voiceMuted ? t('map.voice') : t('map.muted')"
           @click="toggleVoiceMute"
         >
-          <span class="map-voice__label">{{ voiceMuted ? '静音' : '语音' }}</span>
+          <span class="map-voice__label">{{ voiceMuted ? t('map.muted') : t('map.voice') }}</span>
         </button>
         <button
           class="map-fab map-heading-test"
           type="button"
           :class="{ 'is-active': headingTestLock }"
-          :aria-label="headingTestLock ? '关闭朝向锁定' : '开启朝向锁定'"
-          :title="headingTestLock ? '关闭朝向锁定' : '朝向锁定'"
+          :aria-label="headingTestLock ? t('map.headingLockOff') : t('map.headingLockOn')"
+          :title="headingTestLock ? t('map.headingLockOff') : t('map.headingLock')"
           @click="testRotateByHeading"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3030,7 +3059,7 @@ onUnmounted(() => {
           class="map-fab map-pitch3d"
           type="button"
           :class="{ 'is-active': pitch3D }"
-          :aria-label="pitch3D ? '切换到 2D 平面' : '切换到 3D 视角'"
+          :aria-label="pitch3D ? t('map.to2d') : t('map.to3d')"
           :title="pitch3D ? '2D' : '3D'"
           @click="togglePitch3D"
         >
@@ -3041,8 +3070,8 @@ onUnmounted(() => {
           type="button"
           :class="{ 'is-busy': loading, 'is-live': lng != null && !loading }"
           :disabled="loading"
-          :aria-label="navigating ? '导航回中' : loading ? '定位中' : '回到当前位置'"
-          :title="navigating ? '回到导航中心' : '重新定位'"
+          :aria-label="navigating ? t('map.recenterNav') : loading ? t('map.locating') : t('map.recenter')"
+          :title="navigating ? t('map.recenterNav') : t('map.recenter')"
           @click="locateOnce(false)"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3063,7 +3092,7 @@ onUnmounted(() => {
       <Transition name="fade">
         <div v-if="!mapReady && !mapError" class="veil">
           <span class="veil__spin" />
-          <p>正在装载底图</p>
+          <p>{{ t('map.loadingMap') }}</p>
         </div>
       </Transition>
 
@@ -3102,7 +3131,7 @@ onUnmounted(() => {
             :disabled="routing"
             @click.stop="onNavigateClick"
           >
-            {{ routing ? '规划中…' : '导航' }}
+            {{ routing ? t('map.planning') : t('map.nav') }}
           </button>
           <button
             class="relocate relocate--half"
@@ -3110,7 +3139,7 @@ onUnmounted(() => {
             :disabled="routing"
             @click.stop="onRouteClick"
           >
-            {{ routing ? '规划中…' : '路线' }}
+            {{ routing ? t('map.planning') : t('map.route') }}
           </button>
         </template>
 
@@ -3127,7 +3156,7 @@ onUnmounted(() => {
             :disabled="routing || !routePlans[item.id]"
             @click="chooseDriveStyle(item.id)"
           >
-            <span>{{ item.label }}</span>
+            <span>{{ driveStyleBtnLabel(item.id) }}</span>
             <small v-if="routePlans[item.id]">{{ formatDistance(routePlans[item.id].distanceMeters) }}</small>
           </button>
         </div>
@@ -3139,23 +3168,23 @@ onUnmounted(() => {
           :disabled="routing || !routeInfo"
           @click="onStartNavClick"
         >
-          {{ travelMode === 'walk' ? '开始步行导航' : '开始驾车导航' }}
+          {{ travelMode === 'walk' ? t('map.startWalk') : t('map.startDrive') }}
         </button>
         <button v-if="navigating" class="relocate relocate--danger" type="button" @click="stopNavigation">
-          结束导航
+          {{ t('map.stopNav') }}
         </button>
         <button v-if="destination && !navigating" class="relocate" type="button" @click="clearDestination">
-          清除目的地
+          {{ t('map.clearDest') }}
         </button>
       </div>
 
       <p v-if="!navigating && !destination" class="hud__meta">{{ client.schemeLabel }}</p>
 
       <p v-if="showWeChatGate" class="hud__warn">
-        微信无法使用本机开发地址。请点右上角「···」→「在浏览器中打开」。
+        {{ t('gate.hudWechat') }}
       </p>
       <p v-else-if="!secureOk" class="hud__warn">
-        {{ browserHint?.detail || `请用 HTTPS 打开 ${httpsUrl}` }}
+        {{ browserHint?.detail || t('map.openHttps', { url: httpsUrl }) }}
       </p>
     </section>
     </Transition>

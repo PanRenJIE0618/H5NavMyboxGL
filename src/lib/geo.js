@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js'
+
 const R = 6371000
 
 export function haversineMeters(a, b) {
@@ -35,17 +37,19 @@ export function pathLengthMeters(path) {
 
 export function formatDistance(meters) {
   if (!Number.isFinite(meters)) return '—'
-  if (meters < 1000) return `${Math.max(0, Math.round(meters))} 米`
-  return `${(meters / 1000).toFixed(1)} 公里`
+  if (meters < 1000) return t('unit.meters', { n: Math.max(0, Math.round(meters)) })
+  return t('unit.km', { n: (meters / 1000).toFixed(1) })
 }
 
 export function formatDuration(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return ''
   const mins = Math.max(1, Math.round(seconds / 60))
-  if (mins < 60) return `约 ${mins} 分钟`
+  if (mins < 60) return t('unit.mins', { n: mins })
   const hours = Math.floor(mins / 60)
   const rest = mins % 60
-  return rest ? `约 ${hours} 小时 ${rest} 分钟` : `约 ${hours} 小时`
+  return rest
+    ? t('unit.hoursMins', { h: hours, m: rest })
+    : t('unit.hours', { h: hours })
 }
 
 function toRad(value) {

@@ -1,14 +1,15 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import NavMap from './components/NavMap.vue'
 import QuickNav from './components/QuickNav.vue'
 import MapSettings from './components/MapSettings.vue'
+import { t } from './i18n'
 
-const TABS = [
-  { id: 'home', label: '首页' },
-  { id: 'quick', label: '快捷导航' },
-  { id: 'mine', label: '我的' },
-]
+const TABS = computed(() => [
+  { id: 'home', label: t('app.tab.home') },
+  { id: 'quick', label: t('app.tab.quick') },
+  { id: 'mine', label: t('app.tab.mine') },
+])
 
 const tab = ref('home')
 const navigating = ref(false)
@@ -76,7 +77,7 @@ async function onSelectHistory(item) {
       <nav
         v-if="!navigating"
         class="tab-bar"
-        aria-label="主导航"
+        :aria-label="t('app.navAria')"
       >
         <div class="tab-bar__group" role="tablist">
           <button
