@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0B2C4A" />
+    <meta name="theme-color" content="#f0f2f5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
@@ -27,7 +27,7 @@
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 9999;
+        z-index: 10000;
         padding: 28px 18px;
         background: #0b2c4a;
         color: #d7e4ea;
@@ -55,6 +55,368 @@
         word-break: break-all;
         font-size: 13px;
       }
+
+      /* —— Boot splash（贴合项目蓝白卡片风格） —— */
+      .boot-splash {
+        --boot-bg: #f0f2f5;
+        --boot-ink: #1f2a32;
+        --boot-mute: #5a6b75;
+        --boot-line: rgba(31, 42, 50, 0.1);
+        --boot-panel: #ffffff;
+        --boot-paper: #f5f7fa;
+        --boot-navy: #3370ff;
+        --boot-navy-soft: rgba(51, 112, 255, 0.14);
+        --boot-shadow: 0 8px 28px rgba(16, 42, 58, 0.14);
+        position: fixed;
+        inset: 0;
+        z-index: 9990;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: var(--boot-bg);
+        color: var(--boot-ink);
+        font-family: 'Noto Sans SC', 'PingFang SC', sans-serif;
+        opacity: 1;
+        transition:
+          opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+          transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+          visibility 0.55s;
+      }
+      html[data-theme='dark'] .boot-splash {
+        --boot-bg: #0d1218;
+        --boot-ink: #e8eef4;
+        --boot-mute: #9aa8b5;
+        --boot-line: rgba(232, 238, 244, 0.12);
+        --boot-panel: #1a2330;
+        --boot-paper: #121820;
+        --boot-navy: #4d8dff;
+        --boot-navy-soft: rgba(77, 141, 255, 0.2);
+        --boot-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+      }
+      html[data-theme='contrast'] .boot-splash {
+        --boot-bg: #ffffff;
+        --boot-ink: #000000;
+        --boot-mute: #222222;
+        --boot-line: rgba(0, 0, 0, 0.35);
+        --boot-panel: #ffffff;
+        --boot-paper: #ffffff;
+        --boot-navy: #0047ff;
+        --boot-navy-soft: rgba(0, 71, 255, 0.12);
+        --boot-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+      }
+      .boot-splash.is-on {
+        display: flex;
+      }
+      .boot-splash.is-leaving {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translate3d(0, 8px, 0);
+      }
+      .boot-splash__aurora {
+        position: absolute;
+        inset: -20%;
+        background:
+          radial-gradient(circle at 28% 22%, var(--boot-navy-soft), transparent 46%),
+          radial-gradient(circle at 78% 68%, rgba(51, 112, 255, 0.1), transparent 42%);
+        animation: boot-aurora 12s ease-in-out infinite alternate;
+        pointer-events: none;
+      }
+      html[data-theme='dark'] .boot-splash__aurora {
+        background:
+          radial-gradient(circle at 30% 24%, rgba(77, 141, 255, 0.22), transparent 45%),
+          radial-gradient(circle at 70% 70%, rgba(77, 141, 255, 0.12), transparent 40%);
+      }
+      .boot-splash__mesh {
+        position: absolute;
+        inset: 0;
+        opacity: 0.55;
+        background-image:
+          linear-gradient(var(--boot-line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--boot-line) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: radial-gradient(ellipse 65% 55% at 50% 42%, #000 15%, transparent 72%);
+        pointer-events: none;
+      }
+      .boot-splash__core {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        width: min(88vw, 340px);
+        padding: 28px 22px 22px;
+        text-align: center;
+        border-radius: 16px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 248, 252, 0.94) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.75);
+        box-shadow: var(--boot-shadow);
+        animation: boot-card-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      html[data-theme='dark'] .boot-splash__core {
+        background: linear-gradient(180deg, rgba(32, 42, 56, 0.98) 0%, rgba(22, 30, 42, 0.96) 100%);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+      html[data-theme='contrast'] .boot-splash__core {
+        background: #ffffff;
+        border: 2px solid #000000;
+        box-shadow: var(--boot-shadow);
+      }
+      .boot-splash__loader {
+        position: relative;
+        width: 88px;
+        height: 88px;
+      }
+      .boot-splash__radar {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background:
+          conic-gradient(
+            from 0deg,
+            rgba(51, 112, 255, 0.28) 0deg,
+            rgba(51, 112, 255, 0.06) 55deg,
+            transparent 95deg
+          );
+        mask-image: radial-gradient(circle, transparent 28%, #000 30%, #000 70%, transparent 72%);
+        -webkit-mask-image: radial-gradient(circle, transparent 28%, #000 30%, #000 70%, transparent 72%);
+        animation: boot-sweep 2.4s linear infinite;
+      }
+      html[data-theme='dark'] .boot-splash__radar {
+        background:
+          conic-gradient(
+            from 0deg,
+            rgba(77, 141, 255, 0.35) 0deg,
+            rgba(77, 141, 255, 0.08) 55deg,
+            transparent 95deg
+          );
+      }
+      .boot-splash__hud {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .boot-splash__ring-outer {
+        fill: none;
+        stroke: var(--boot-navy-soft);
+        stroke-width: 1.5;
+      }
+      .boot-splash__beam-g {
+        animation: boot-sweep 2.4s linear infinite;
+        transform-origin: 44px 44px;
+        transform-box: view-box;
+      }
+      .boot-splash__sat-g {
+        animation: boot-orbit-rev 4.5s linear infinite;
+        transform-origin: 44px 44px;
+        transform-box: view-box;
+      }
+      .boot-splash__ring-mid {
+        fill: none;
+        stroke: var(--boot-navy);
+        stroke-width: 1.25;
+        stroke-dasharray: 4 5;
+        stroke-opacity: 0.55;
+        animation: boot-orbit 6s linear infinite;
+        transform-origin: 44px 44px;
+        transform-box: view-box;
+      }
+      .boot-splash__ring-inner {
+        fill: none;
+        stroke: var(--boot-navy-soft);
+        stroke-width: 1;
+      }
+      .boot-splash__ticks {
+        stroke: var(--boot-navy);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-opacity: 0.55;
+      }
+      .boot-splash__beam {
+        fill: url(#bootBeam);
+      }
+      .boot-splash__sat {
+        fill: var(--boot-navy);
+      }
+      .boot-splash__nav {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 28px;
+        height: 28px;
+        margin: -14px 0 0 -14px;
+        color: var(--boot-navy);
+        animation: boot-lock 1.8s ease-in-out infinite;
+        filter: drop-shadow(0 2px 6px rgba(51, 112, 255, 0.35));
+      }
+      .boot-splash__nav svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .boot-splash__lock {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 36px;
+        height: 36px;
+        margin: -18px 0 0 -18px;
+        border-radius: 50%;
+        border: 1.5px solid var(--boot-navy);
+        opacity: 0;
+        animation: boot-lock-ring 1.8s ease-out infinite;
+        pointer-events: none;
+      }
+      .boot-splash__copy {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .boot-splash__brand {
+        margin: 0;
+        font-family: 'ZCOOL XiaoWei', 'Songti SC', serif;
+        font-size: clamp(28px, 7vw, 34px);
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        line-height: 1.15;
+        color: var(--boot-ink);
+      }
+      .boot-splash__sub {
+        margin: 0;
+        font-family: 'IBM Plex Mono', ui-monospace, monospace;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        color: var(--boot-navy);
+      }
+      .boot-splash__status {
+        margin: 0;
+        min-height: 1.2em;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--boot-mute);
+      }
+      .boot-splash__track {
+        position: relative;
+        width: 100%;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--boot-paper);
+        overflow: hidden;
+        box-shadow: inset 0 0 0 1px var(--boot-line);
+      }
+      html[data-theme='dark'] .boot-splash__track {
+        background: rgba(232, 238, 244, 0.08);
+      }
+      .boot-splash__bar {
+        position: relative;
+        height: 100%;
+        width: 8%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #3370ff, #5b8cff 55%, #89adff);
+        transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      html[data-theme='dark'] .boot-splash__bar {
+        background: linear-gradient(90deg, #4d8dff, #7aa8ff 55%, #a8c5ff);
+      }
+      html[data-theme='contrast'] .boot-splash__bar {
+        background: #0047ff;
+      }
+      .boot-splash__bar::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.55),
+          transparent
+        );
+        transform: translateX(-120%);
+        animation: boot-shimmer 1.5s ease-in-out infinite;
+      }
+      @keyframes boot-aurora {
+        from {
+          transform: translate3d(-1%, 0, 0) scale(1);
+        }
+        to {
+          transform: translate3d(2%, 1%, 0) scale(1.05);
+        }
+      }
+      @keyframes boot-card-in {
+        from {
+          opacity: 0;
+          transform: translate3d(0, 12px, 0);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @keyframes boot-sweep {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes boot-orbit {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes boot-orbit-rev {
+        to {
+          transform: rotate(-360deg);
+        }
+      }
+      @keyframes boot-lock {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        45% {
+          transform: scale(1.06);
+        }
+        60% {
+          transform: scale(0.96);
+        }
+      }
+      @keyframes boot-lock-ring {
+        0% {
+          transform: scale(0.7);
+          opacity: 0.5;
+        }
+        100% {
+          transform: scale(1.55);
+          opacity: 0;
+        }
+      }
+      @keyframes boot-shimmer {
+        100% {
+          transform: translateX(220%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-splash__aurora,
+        .boot-splash__radar,
+        .boot-splash__beam-g,
+        .boot-splash__ring-mid,
+        .boot-splash__sat-g,
+        .boot-splash__nav,
+        .boot-splash__lock,
+        .boot-splash__bar::after,
+        .boot-splash__core {
+          animation: none !important;
+        }
+        .boot-splash__lock {
+          opacity: 0 !important;
+        }
+      }
+
     </style>
   </head>
   <body>
@@ -64,6 +426,64 @@
       <p>请点右上角 <strong>···</strong> → <strong>在浏览器中打开</strong>。推荐系统浏览器或百度浏览器。</p>
       <code id="wx-boot-url"></code>
     </div>
+
+        <div
+      id="boot-splash"
+      class="boot-splash is-on"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div class="boot-splash__aurora" aria-hidden="true"></div>
+      <div class="boot-splash__mesh" aria-hidden="true"></div>
+      <div class="boot-splash__core">
+        <div class="boot-splash__loader" aria-hidden="true">
+          <div class="boot-splash__radar"></div>
+          <svg class="boot-splash__hud" viewBox="0 0 88 88">
+            <defs>
+              <linearGradient id="bootBeam" x1="44" y1="44" x2="74" y2="18" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#3370ff" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="#3370ff" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+            <circle class="boot-splash__ring-outer" cx="44" cy="44" r="40" />
+            <circle class="boot-splash__ring-mid" cx="44" cy="44" r="31" />
+            <circle class="boot-splash__ring-inner" cx="44" cy="44" r="20" />
+            <g class="boot-splash__ticks">
+              <line x1="44" y1="6" x2="44" y2="12" />
+              <line x1="44" y1="76" x2="44" y2="82" />
+              <line x1="6" y1="44" x2="12" y2="44" />
+              <line x1="76" y1="44" x2="82" y2="44" />
+            </g>
+            <g class="boot-splash__beam-g">
+              <path class="boot-splash__beam" d="M44 44 L52 8 A40 40 0 0 1 74 20 Z" />
+            </g>
+            <g class="boot-splash__sat-g">
+              <circle class="boot-splash__sat" cx="44" cy="13" r="2.2" />
+            </g>
+          </svg>
+          <span class="boot-splash__lock"></span>
+          <span class="boot-splash__nav">
+            <svg viewBox="0 0 28 28" fill="none">
+              <path
+                d="M14 3.2 L22.5 22.2 L14 18.4 L5.5 22.2 Z"
+                fill="currentColor"
+              />
+              <circle cx="14" cy="14.8" r="2.1" fill="#fff" />
+            </svg>
+          </span>
+        </div>
+        <div class="boot-splash__copy">
+          <h1 class="boot-splash__brand">现场定位</h1>
+          <p class="boot-splash__sub">MyBoxGL</p>
+        </div>
+        <p class="boot-splash__status" data-boot-status>正在启动…</p>
+        <div class="boot-splash__track" aria-hidden="true">
+          <div class="boot-splash__bar" data-boot-bar style="width: 8%"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="app"></div>
     <script>
       ;(function () {

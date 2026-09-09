@@ -7,15 +7,22 @@ import {
   removeNavHistory,
 } from '../lib/navHistory'
 import { listRecommendPlaces, recommendToHistoryShape } from '../lib/recommendPlaces'
+import {
+  frequentToHistoryShape,
+  listFrequentPlaces,
+  removeFrequentPlace,
+} from '../lib/frequentPlaces'
 import { formatDistance, formatDuration } from '../lib/geo'
 import { t } from '../i18n'
 
 const emit = defineEmits(['select', 'go-home'])
 
+const frequents = ref(listFrequentPlaces())
 const recommends = ref(listRecommendPlaces())
 const list = ref(loadNavHistory())
 
 function refresh() {
+  frequents.value = listFrequentPlaces()
   recommends.value = listRecommendPlaces()
   list.value = loadNavHistory()
 }
@@ -33,12 +40,23 @@ function onRemove(id, event) {
   list.value = removeNavHistory(id)
 }
 
+function onRemoveFrequent(id, event) {
+  event?.stopPropagation?.()
+  removeFrequentPlace(id)
+  frequents.value = listFrequentPlaces()
+}
+
 function onSelectHistory(item) {
   emit('select', item)
 }
 
 function onSelectRecommend(place) {
   const payload = recommendToHistoryShape(place)
+  if (payload) emit('select', payload)
+}
+
+function onSelectFrequent(place) {
+  const payload = frequentToHistoryShape(place)
   if (payload) emit('select', payload)
 }
 </script>
@@ -58,6 +76,40 @@ function onSelectRecommend(place) {
     </header>
 
     <p class="quick-page__hint">{{ t('quick.hint') }}</p>
+
+    <section class="quick-section" aria-labelledby="quick-frequent-title">
+      <h2 id="quick-frequent-title" class="quick-section__title">{{ t('quick.frequent') }}</h2>
+      <p v-if="!frequents.length" class="quick-page__empty quick-page__empty--inline">
+        {{ t('quick.frequentEmpty') }}
+      </p>
+      <div v-else class="quick-list quick-list--tight">
+        <button
+          v-for="place in frequents"
+          :key="place.id"
+          class="quick-card quick-card--frequent"
+          type="button"
+          @click="onSelectFrequent(place)"
+        >
+          <div class="quick-card__body">
+            <strong>
+              {{ place.name || t('quick.dest') }}
+              <span class="quick-card__tag">{{ t('quick.frequentCount', { n: place.count }) }}</span>
+            </strong>
+            <small v-if="place.address" class="quick-card__addr">{{ place.address }}</small>
+          </div>
+          <span
+            class="quick-card__remove"
+            role="button"
+            tabindex="0"
+            :aria-label="t('quick.removeAria')"
+            @click="onRemoveFrequent(place.id, $event)"
+            @keydown.enter.prevent="onRemoveFrequent(place.id, $event)"
+          >
+            {{ t('quick.remove') }}
+          </span>
+        </button>
+      </div>
+    </section>
 
     <section class="quick-section" aria-labelledby="quick-recommend-title">
       <h2 id="quick-recommend-title" class="quick-section__title">{{ t('quick.recommend') }}</h2>

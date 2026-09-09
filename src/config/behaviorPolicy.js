@@ -1,9 +1,32 @@
 /**
- * 用户行为策略配置
+ * 用户行为策略配置（到达 / 偏航 / 测速 / 语音 / 会话 / 步行朝向等）
  *
  * - 本地默认值见 DEFAULT_BEHAVIOR_POLICY
  * - 运行时用 applyBehaviorPolicy / setBehaviorPolicy 热更新（可接后端下发）
  * - 读取请用 getBehaviorPolicy()，勿缓存解构后的数字常量
+ *
+ * ## 字段一览（DEFAULT_BEHAVIOR_POLICY）
+ *
+ * | 字段 | 含义 |
+ * | --- | --- |
+ * | version | 策略版本号 |
+ * | locationResumeAfterDragMs | 拖图后恢复定位回调等待（ms） |
+ * | viewLockAfterDragIdleMs | 拖图停止后自动开启视角跟随等待（ms） |
+ * | pitch2d / pitch3d / maxPitch | 2D/3D 俯仰角与上限 |
+ * | followUserOnInit / headingLockOnInit | 进页默认视角跟随 / 朝向锁定 |
+ * | followUserOnNavStart / headingLockOnNavStart | 开始导航时默认开关 |
+ * | pinCameraHoldMs | 强制居中后钉住相机时长（ms） |
+ * | headingSampleWindowMs | 朝向采样窗口（ms） |
+ * | arriveMeters | 到达判定距离（m） |
+ * | offRouteMeters / offRouteHits | 偏航距离阈值与连续命中次数 |
+ * | rerouteCooldownMs | 重规划冷却（ms） |
+ * | offRouteAutoReroute | 偏航后是否自动重规划 |
+ * | speedLimitKmh / speedIdleKmh | 限速与静止显示阈值（km/h） |
+ * | voiceEnabled / voiceRate / voiceLang | 语音总开关、语速、语言 |
+ * | navSessionTtlMs | 会话快照有效期（ms） |
+ * | navSessionPersistThrottleMs / navSessionPersistMinMeters | 会话持久化节流 |
+ * | navVoiceRelockHiddenMs | 挂起过久回前台后需重新解锁语音 |
+ * | walk.* | 未导航时步行稳定朝向自动校正参数 |
  */
 
 /** @typedef {typeof DEFAULT_BEHAVIOR_POLICY} BehaviorPolicy */

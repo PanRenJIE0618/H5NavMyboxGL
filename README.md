@@ -40,6 +40,7 @@
 
 ### 快捷导航
 
+- **常去地点**：结束导航后按目的地累计，满 2 次起显示，可单条删除
 - **推荐导航点**（可配置）：如天安门、北京西站、南站、机场 T3、三里屯等
 - **历史导航点**：结束导航后写入，可单条删除 / 清空
 - 点选后回到首页并设为目的地，便于继续规划
@@ -62,6 +63,7 @@
 - **导航行为**：自动视角锁定、语音播报、默认出行方式、默认路线偏好
 - **外观**：浅色 / 深色 / 高对比（深色同步暗色矢量底图）
 - **底图**：矢量 / 影像 / 地形
+- **存储**：查看本地/会话占用，单项清理、清理导航数据、清空全部；可恢复默认设置
 - **本机信息**：浏览器、设备名、系统、坐标系、定位方案、屏幕与能力摘要等（不含账号与安全策略细节）
 
 ### 其它
@@ -116,21 +118,34 @@ npm run preview  # 预览构建结果
 
 ```
 src/
-  App.vue                 # 三 Tab 壳，地图常驻
-  main.js                 # 启动：主题 / 导航偏好
-  config.js               # 天地图 tk、默认视野等
-  config/behaviorPolicy.js # 到达/偏航/测速/语音等行为策略
+  App.vue                      # 三 Tab 壳，地图常驻
+  main.js                      # 启动：主题 / 导航偏好
+  config.js                    # 天地图 tk、默认视野；再导出行为策略
+  config/
+    behaviorPolicy.js          # 到达/偏航/测速/语音等行为策略
+    mapDefaults.js             # 地图默认常量再导出
   components/
-    NavMap.vue            # 地图与导航主界面
-    QuickNav.vue          # 快捷导航
-    MapSettings.vue       # 「我的」设置
-    DevConsole.vue        # 调试日志
-  composables/            # 定位、朝向
-  lib/                    # 搜索、路线、会话、语音、剪贴板、主题等
-  style.css               # 全局样式与主题变量
-public/libs/mapboxgl/     # iClient 静态资源
-docs/superpowers/         # 设计与规格文档
+    nav/
+      NavMap.vue               # 地图导航编排壳
+      NavMast.vue              # 搜索头 / 罗盘
+      NavHud.vue               # 底部信息卡
+      NavBanners.vue           # 恢复会话 / 剪贴板 / 偏航条
+      NavMapChrome.vue         # 测速 / 进度 / 出行方式 / FAB
+    QuickNav.vue               # 快捷导航
+    MapSettings.vue            # 「我的」设置
+    DevConsole.vue             # 调试日志
+  composables/
+    useGeolocation.js / useDeviceHeading.js
+    nav/                       # 地图域：Core / Camera / Routing / Session / Clipboard / Ui
+  lib/                         # 搜索、路线、会话、语音、剪贴板、主题等
+  style.css
+public/libs/mapboxgl/
+docs/
+  modules.md                   # 模块职责、存储键、策略字段
+  superpowers/                 # 设计与规格
 ```
+
+更细的模块说明见 [docs/modules.md](docs/modules.md)。
 
 ---
 
@@ -144,6 +159,7 @@ docs/superpowers/         # 设计与规格文档
 | `h5nav:navPrefs` | 语音、默认出行、默认路线 |
 | `h5nav:autoViewLock` | 自动视角锁定 |
 | `h5nav:navHistory` | 导航历史 |
+| `h5nav:frequentPlaces` | 常去地点 |
 | `h5nav:session` | 未完成导航会话（`sessionStorage`） |
 
 行为阈值（到达距离、偏航、测速限速等）见 `src/config/behaviorPolicy.js`，支持运行时热更新。

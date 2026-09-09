@@ -1,9 +1,10 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import NavMap from './components/NavMap.vue'
+import NavMap from './components/nav/NavMap.vue'
 import QuickNav from './components/QuickNav.vue'
 import MapSettings from './components/MapSettings.vue'
 import { t } from './i18n'
+import { dismissBootSplash, setBootProgress } from './lib/bootSplash'
 
 const TABS = computed(() => [
   { id: 'home', label: t('app.tab.home') },
@@ -15,6 +16,7 @@ const tab = ref('home')
 const navigating = ref(false)
 const mapRef = ref(null)
 const quickRef = ref(null)
+const bootDone = ref(false)
 
 watch(tab, (id) => {
   if (id === 'quick') {
@@ -37,21 +39,28 @@ async function onSelectHistory(item) {
   await nextTick()
   await mapRef.value?.applyHistoryItem?.(item)
 }
+
+function onMapReady() {
+  if (bootDone.value) return
+  bootDone.value = true
+  setBootProgress(100, t('boot.ready'))
+  dismissBootSplash()
+}
 </script>
 
 <template>
   <div
     class="app-shell"
-    :class="{ 'is-nav': navigating, 'has-tabs': !navigating }"
+    :class="{ 'is-nav': navigating, 'has-tabs': !navigating, 'is-booting': !bootDone }"
   >
     <div class="app-shell__main">
-      <!-- 地图常驻，避免切页重建 -->
       <NavMap
         ref="mapRef"
         class="app-page app-page--map"
         :class="{ 'is-dimmed': tab !== 'home' }"
         :active="tab === 'home'"
         @navigating-change="onNavigatingChange"
+        @map-ready="onMapReady"
       />
 
       <Transition name="page-sheet">
@@ -75,7 +84,7 @@ async function onSelectHistory(item) {
 
     <Transition name="tab-bar">
       <nav
-        v-if="!navigating"
+        v-if="!navigating && bootDone"
         class="tab-bar"
         :aria-label="t('app.navAria')"
       >

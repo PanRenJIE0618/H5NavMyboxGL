@@ -15,7 +15,7 @@ watch(
 
 <template>
   <Transition name="sheet-up">
-    <div v-show="debugConsoleOpen" class="dev-console">
+    <div v-if="debugConsoleOpen" class="dev-console">
       <div class="dev-console__bar">
         <button class="dev-console__clear" type="button" @click="clearDebugLog">清空</button>
         <span class="dev-console__hint">定位调试 · 新日志在上</span>

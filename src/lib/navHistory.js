@@ -3,6 +3,8 @@
  * 每次结束导航后写入一条记录。
  */
 
+import { recordFrequentPlace } from './frequentPlaces.js'
+
 export const NAV_HISTORY_KEY = 'h5nav:navHistory'
 export const NAV_HISTORY_VERSION = 1
 export const NAV_HISTORY_MAX = 30
@@ -97,6 +99,11 @@ export function pushNavHistory(record) {
 
   const next = [item, ...prev].slice(0, NAV_HISTORY_MAX)
   writeAll(next)
+  try {
+    recordFrequentPlace(item.destination)
+  } catch {
+    // ignore
+  }
   return next
 }
 

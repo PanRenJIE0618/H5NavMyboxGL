@@ -19,6 +19,14 @@ import {
 } from '../lib/navPrefs'
 import { TRAVEL_MODES, DRIVE_STYLES } from '../lib/route'
 import { getDeviceInfoRows } from '../lib/deviceInfo'
+import {
+  clearAllAppStorage,
+  clearAppDataStorage,
+  clearAppStorageItem,
+  formatStorageBytes,
+  getAppStorageSummary,
+  restoreAppDefaults,
+} from '../lib/appStorage'
 import { LOCALE_OPTIONS, locale, setLocale, t } from '../i18n'
 
 defineProps({
@@ -34,6 +42,10 @@ const autoViewLock = ref(getAutoViewLock())
 const prefs = ref(getNavPrefs())
 const deviceRows = ref(getDeviceInfoRows())
 const deviceExpanded = ref(false)
+const storageSummary = ref(getAppStorageSummary())
+const storageExpanded = ref(false)
+const storageFlash = ref('')
+let storageFlashTimer = 0
 
 const voiceEnabled = computed(() => prefs.value.voiceEnabled)
 const travelMode = computed(() => prefs.value.travelMode)
@@ -74,20 +86,53 @@ const visibleDeviceRows = computed(() =>
     : devicePrimaryRows.value,
 )
 
+const visibleStorageRows = computed(() => {
+  const rows = storageSummary.value.rows || []
+  if (storageExpanded.value) return rows
+  const used = rows.filter((row) => row.present)
+  return used.length ? used.slice(0, 5) : rows.slice(0, 4)
+})
+
+const storageTotalLabel = computed(() =>
+  t('mine.storageTotal', {
+    size: formatStorageBytes(storageSummary.value.totalBytes || 0),
+    used: storageSummary.value.usedCount || 0,
+    total: storageSummary.value.totalCount || 0,
+  }),
+)
+
 function refreshDeviceRows() {
   deviceRows.value = getDeviceInfoRows()
 }
 
-watch(locale, () => {
-  refreshDeviceRows()
-})
+function refreshStorage() {
+  storageSummary.value = getAppStorageSummary()
+}
 
-onMounted(() => {
+function flashStorage(message) {
+  storageFlash.value = message
+  if (storageFlashTimer) window.clearTimeout(storageFlashTimer)
+  storageFlashTimer = window.setTimeout(() => {
+    storageFlash.value = ''
+  }, 1800)
+}
+
+function syncLocalStateFromStore() {
   theme.value = getStoredUiTheme()
   basemap.value = getStoredBasemap()
   autoViewLock.value = getAutoViewLock()
   prefs.value = getNavPrefs()
   refreshDeviceRows()
+  refreshStorage()
+}
+
+watch(locale, () => {
+  refreshDeviceRows()
+  refreshStorage()
+})
+
+onMounted(() => {
+  syncLocalStateFromStore()
 })
 
 function chooseTheme(id) {
@@ -95,30 +140,60 @@ function chooseTheme(id) {
   if (id === 'dark' && basemap.value !== 'vec') {
     basemap.value = setBasemap('vec')
   }
+  refreshStorage()
 }
 
 function chooseBasemap(id) {
   basemap.value = setBasemap(id)
+  refreshStorage()
 }
 
 function chooseLocale(id) {
   setLocale(id)
+  refreshStorage()
 }
 
 function toggleAutoViewLock() {
   autoViewLock.value = setAutoViewLock(!autoViewLock.value)
+  refreshStorage()
 }
 
 function toggleVoice() {
   prefs.value = setVoiceEnabled(!prefs.value.voiceEnabled)
+  refreshStorage()
 }
 
 function chooseTravelMode(id) {
   prefs.value = setDefaultTravelMode(id)
+  refreshStorage()
 }
 
 function chooseDriveStyle(id) {
   prefs.value = setDefaultDriveStyle(id)
+  refreshStorage()
+}
+
+function onClearStorageItem(id) {
+  storageSummary.value = clearAppStorageItem(id)
+  syncLocalStateFromStore()
+  flashStorage(t('mine.storageCleared'))
+}
+
+function onClearNavData() {
+  storageSummary.value = clearAppDataStorage()
+  flashStorage(t('mine.storageCleared'))
+}
+
+function onClearAllStorage() {
+  storageSummary.value = clearAllAppStorage()
+  syncLocalStateFromStore()
+  flashStorage(t('mine.storageCleared'))
+}
+
+function onRestoreDefaults() {
+  restoreAppDefaults()
+  syncLocalStateFromStore()
+  flashStorage(t('mine.restoreDone'))
 }
 
 function themeLabel(id) {
@@ -378,6 +453,65 @@ function onBack() {
               </button>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="mine-block">
+        <header class="mine-block__head">
+          <h2>{{ t('mine.storage') }}</h2>
+          <p>{{ t('mine.storageHint') }}</p>
+        </header>
+
+        <p class="mine-storage__summary">{{ storageTotalLabel }}</p>
+        <Transition name="mine-caption">
+          <p v-if="storageFlash" class="mine-storage__flash" role="status">{{ storageFlash }}</p>
+        </Transition>
+
+        <div class="mine-storage" role="list">
+          <div
+            v-for="row in visibleStorageRows"
+            :key="row.id"
+            class="mine-storage__row"
+            role="listitem"
+          >
+            <div class="mine-storage__meta">
+              <strong>{{ t(row.labelKey) }}</strong>
+              <small>
+                {{ t(`storage.scope.${row.scope}`) }}
+                ·
+                {{ row.present ? formatStorageBytes(row.bytes) : t('mine.storageEmpty') }}
+              </small>
+            </div>
+            <button
+              class="mine-storage__clear"
+              type="button"
+              :disabled="!row.present"
+              @click="onClearStorageItem(row.id)"
+            >
+              {{ t('mine.storageClear') }}
+            </button>
+          </div>
+        </div>
+
+        <button
+          class="mine-more"
+          type="button"
+          :aria-expanded="storageExpanded"
+          @click="storageExpanded = !storageExpanded"
+        >
+          {{ storageExpanded ? t('mine.less') : t('mine.more') }}
+        </button>
+
+        <div class="mine-storage__actions">
+          <button class="mine-action" type="button" @click="onRestoreDefaults">
+            {{ t('mine.restoreDefaults') }}
+          </button>
+          <button class="mine-action mine-action--ghost" type="button" @click="onClearNavData">
+            {{ t('mine.storageClearData') }}
+          </button>
+          <button class="mine-action mine-action--danger" type="button" @click="onClearAllStorage">
+            {{ t('mine.storageClearAll') }}
+          </button>
         </div>
       </section>
 

@@ -57,6 +57,17 @@ export function applyUiTheme(theme) {
   } catch {
     // ignore
   }
+  try {
+    const meta = document.querySelector('meta[name="theme-color"]')
+    if (meta) {
+      meta.setAttribute(
+        'content',
+        id === 'dark' ? '#0d1218' : id === 'contrast' ? '#ffffff' : '#f0f2f5',
+      )
+    }
+  } catch {
+    // ignore
+  }
   return id
 }
 
