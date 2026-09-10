@@ -1,3 +1,5 @@
+import { request } from './http.js'
+
 export async function searchPlaces(keyword, around, tk) {
   const text = String(keyword || '').trim()
   if (!text) throw new Error('请输入地址或地点名称')
@@ -50,19 +52,19 @@ async function httpNearbySearch(text, around, tk) {
 
 async function fetchSearch(postStr, tk) {
   const url = `https://api.tianditu.gov.cn/v2/search?postStr=${encodeURIComponent(JSON.stringify(postStr))}&type=query&tk=${tk}`
-  const res = await fetch(url)
-  if (!res.ok) return []
-  const data = await res.json()
-  return normalizeSearchResult(data)
+  try {
+    const data = await request(url, { parse: 'json', silent: true, timeout: 12000 })
+    return normalizeSearchResult(data)
+  } catch {
+    return []
+  }
 }
 
 async function httpGeocode(text, tk) {
   if (!tk) return []
   try {
     const url = `https://api.tianditu.gov.cn/geocoder?ds=${encodeURIComponent(JSON.stringify({ keyWord: text }))}&tk=${tk}`
-    const res = await fetch(url)
-    if (!res.ok) return []
-    const data = await res.json()
+    const data = await request(url, { parse: 'json', silent: true, timeout: 12000 })
     const loc = data.location || data.result?.location
     const parsed = toPlace({
       name: data.location?.level || text,

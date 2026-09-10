@@ -1,4 +1,5 @@
 import { haversineMeters } from './geo.js'
+import { request } from './http.js'
 import { t } from '../i18n/index.js'
 
 const DRIVE_SPEED_MPS = 10
@@ -80,9 +81,7 @@ async function planWithHttp(start, end, tk, style) {
     style: String(style),
   })
   const url = `https://api.tianditu.gov.cn/drive?postStr=${encodeURIComponent(postStr)}&type=search&tk=${encodeURIComponent(tk)}`
-  const res = await fetch(url)
-  const text = await res.text()
-  if (!res.ok) throw new Error('驾车规划接口请求失败')
+  const text = await request(url, { parse: 'text', timeout: 20000 })
   const parsed = parseDriveBody(text, style)
   if (!parsed?.path?.length) throw new Error('没有找到驾车路线')
   return parsed

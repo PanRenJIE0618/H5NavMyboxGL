@@ -1,3 +1,5 @@
+import { request } from '../lib/http.js'
+
 /**
  * 用户行为策略配置（到达 / 偏航 / 测速 / 语音 / 会话 / 步行朝向等）
  *
@@ -295,8 +297,6 @@ function emitChange() {
  * @param {RequestInit} [init]
  */
 export async function fetchBehaviorPolicy(url, init) {
-  const res = await fetch(url, init)
-  if (!res.ok) throw new Error(`行为策略拉取失败 HTTP ${res.status}`)
-  const data = await res.json()
+  const data = await request(url, { ...init, parse: 'json', timeout: 12000 })
   return applyBehaviorPolicy(data)
 }
