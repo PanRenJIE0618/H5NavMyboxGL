@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import NavMap from './components/nav/NavMap.vue'
 import QuickNav from './components/QuickNav.vue'
 import MapSettings from './components/MapSettings.vue'
+import AppToastHost from './components/AppToastHost.vue'
 import { t } from './i18n'
 import { dismissBootSplash, setBootProgress } from './lib/bootSplash'
 
@@ -104,5 +105,7 @@ function onMapReady() {
         </div>
       </nav>
     </Transition>
+
+    <AppToastHost />
   </div>
 </template>
