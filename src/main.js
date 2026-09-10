@@ -6,6 +6,7 @@ import { initNavPrefs } from './lib/navPrefs'
 import { initI18n } from './i18n'
 import { initBootSplash, setBootProgress } from './lib/bootSplash'
 import { t } from './i18n'
+import { startVersionWatcher } from './lib/appVersion'
 
 initBootSplash()
 initI18n()
@@ -13,6 +14,7 @@ initUiTheme()
 initNavPrefs()
 setBootProgress(18, t('boot.starting'))
 createApp(App).mount('#app')
+startVersionWatcher()
 setBootProgress(52, t('boot.map'))
 
 try {

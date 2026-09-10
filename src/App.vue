@@ -4,8 +4,10 @@ import NavMap from './components/nav/NavMap.vue'
 import QuickNav from './components/QuickNav.vue'
 import MapSettings from './components/MapSettings.vue'
 import AppToastHost from './components/AppToastHost.vue'
+import AppVersionBanner from './components/AppVersionBanner.vue'
 import { t } from './i18n'
 import { dismissBootSplash, setBootProgress } from './lib/bootSplash'
+import { setNavigating } from './lib/appVersion'
 
 const TABS = computed(() => [
   { id: 'home', label: t('app.tab.home') },
@@ -32,6 +34,7 @@ function setTab(id) {
 
 function onNavigatingChange(value) {
   navigating.value = Boolean(value)
+  setNavigating(navigating.value)
   if (navigating.value) tab.value = 'home'
 }
 
@@ -107,5 +110,6 @@ function onMapReady() {
     </Transition>
 
     <AppToastHost />
+    <AppVersionBanner />
   </div>
 </template>
