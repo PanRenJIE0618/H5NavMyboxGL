@@ -275,4 +275,13 @@ export default {
     'Location is unreliable in WeChat here. Tap ··· → Open in browser.',
   'gate.needHttpsTitle': 'HTTPS required for location',
   'gate.needHttpsDetail': 'Open {url} in Chrome / Safari on your phone.',
+
+  'http.offline': 'Network disconnected. Check your connection.',
+  'http.timeout': 'Request timed out. Please try again.',
+  'http.network': 'Network error. Please try again.',
+  'http.unavailable': 'Service temporarily unavailable ({status})',
+  'http.parse': 'Invalid response from server',
+  'version.title': 'A new version is available. Refresh to get the latest features.',
+  'version.refresh': 'Refresh now',
+  'version.dismiss': 'Dismiss',
 }

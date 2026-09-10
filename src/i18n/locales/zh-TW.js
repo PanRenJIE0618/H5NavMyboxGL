@@ -275,4 +275,13 @@ export default {
     '目前環境無法在微信內可靠定位。請點右上角「···」→「在瀏覽器中開啟」。',
   'gate.needHttpsTitle': '需要 HTTPS 才能定位',
   'gate.needHttpsDetail': '請用手機瀏覽器開啟 {url} 。推薦 Chrome / Safari / 百度瀏覽器。',
+
+  'http.offline': '網路已斷開，請檢查連線',
+  'http.timeout': '請求逾時，請稍後重試',
+  'http.network': '網路異常，請稍後重試',
+  'http.unavailable': '服務暫時不可用（{status}）',
+  'http.parse': '服務返回異常',
+  'version.title': '發現新版本，重新整理後使用最新功能',
+  'version.refresh': '立即重新整理',
+  'version.dismiss': '關閉',
 }
