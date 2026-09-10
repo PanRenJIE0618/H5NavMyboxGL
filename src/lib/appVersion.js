@@ -28,7 +28,13 @@ export function subscribeVersion(fn) {
 }
 
 export function dismissVersionPrompt() {
-  if (remote) sessionStorage.setItem(IGNORE_KEY, remote)
+  if (remote) {
+    try {
+      sessionStorage.setItem(IGNORE_KEY, remote)
+    } catch {
+      /* ignore */
+    }
+  }
   emit()
 }
 

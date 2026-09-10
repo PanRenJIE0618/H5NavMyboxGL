@@ -34,9 +34,10 @@ onUnmounted(() => stop())
     <button
       class="app-version-banner__close"
       type="button"
+      :aria-label="t('version.dismiss')"
       @click="dismissVersionPrompt"
     >
-      {{ t('version.dismiss') }}
+      ×
     </button>
   </div>
 </template>

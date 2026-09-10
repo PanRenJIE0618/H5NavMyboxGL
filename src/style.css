@@ -2827,6 +2827,7 @@ html[data-theme='dark'] .quick-card__go {
   font-weight: 600;
 }
 .app-version-banner__close {
+  flex-shrink: 0;
   border: 0;
   background: transparent;
   color: var(--mist);

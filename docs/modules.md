@@ -142,6 +142,9 @@
 | `deviceWalkBehavior.js` | 步行朝向校正 |
 | `appStorage.js` | 存储清单与清理/恢复默认 |
 | `bootSplash.js` | 启动屏进度与关闭 |
+| `http.js` | 业务 `request()` + 网络/HTTP 错误 toast |
+| `toast.js` | 全局 toast 事件总线 |
+| `appVersion.js` | 生产环境 BUILD-VERSION 轮询与更新提示 |
 | `basemap.js` / `uiTheme.js` / `viewLock.js` / `navPrefs.js` | 底图、主题、视角锁、导航偏好 |
 
 ---
