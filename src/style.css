@@ -2500,6 +2500,11 @@ html[data-theme='contrast'] .tab-bar__group {
     0 8px 16px rgba(0, 0, 0, 0.18);
 }
 
+.tab-bar__group.is-wide .tab-bar__btn {
+  padding: 0 4px;
+  font-size: 12px;
+}
+
 .tab-bar__btn {
   flex: 1 1 0;
   height: 42px;

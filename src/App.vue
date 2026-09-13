@@ -3,17 +3,30 @@ import { computed, nextTick, ref, watch } from 'vue'
 import NavMap from './components/nav/NavMap.vue'
 import QuickNav from './components/QuickNav.vue'
 import MapSettings from './components/MapSettings.vue'
+import LoginPage from './components/auth/LoginPage.vue'
+import InspectionListPage from './components/inspection/InspectionListPage.vue'
 import AppToastHost from './components/AppToastHost.vue'
 import AppVersionBanner from './components/AppVersionBanner.vue'
+import { SHOW_AUTH_INSPECTION_UI } from './config/featureFlags'
 import { t } from './i18n'
 import { dismissBootSplash, setBootProgress } from './lib/bootSplash'
 import { setNavigating } from './lib/appVersion'
 
-const TABS = computed(() => [
-  { id: 'home', label: t('app.tab.home') },
-  { id: 'quick', label: t('app.tab.quick') },
-  { id: 'mine', label: t('app.tab.mine') },
-])
+const TABS = computed(() => {
+  const base = [
+    { id: 'home', label: t('app.tab.home') },
+    { id: 'quick', label: t('app.tab.quick') },
+    { id: 'mine', label: t('app.tab.mine') },
+  ]
+  if (!SHOW_AUTH_INSPECTION_UI) return base
+  return [
+    ...base,
+    { id: 'login', label: t('app.tab.login') },
+    { id: 'inspection', label: t('app.tab.inspection') },
+  ]
+})
+
+const tabBarWide = computed(() => TABS.value.length > 3)
 
 const tab = ref('home')
 const navigating = ref(false)
@@ -84,6 +97,20 @@ function onMapReady() {
           embedded
         />
       </Transition>
+
+      <Transition name="page-sheet">
+        <LoginPage
+          v-if="SHOW_AUTH_INSPECTION_UI && tab === 'login'"
+          class="app-page app-page--overlay"
+        />
+      </Transition>
+
+      <Transition name="page-sheet">
+        <InspectionListPage
+          v-if="SHOW_AUTH_INSPECTION_UI && tab === 'inspection'"
+          class="app-page app-page--overlay"
+        />
+      </Transition>
     </div>
 
     <Transition name="tab-bar">
@@ -92,7 +119,11 @@ function onMapReady() {
         class="tab-bar"
         :aria-label="t('app.navAria')"
       >
-        <div class="tab-bar__group" role="tablist">
+        <div
+          class="tab-bar__group"
+          :class="{ 'is-wide': tabBarWide }"
+          role="tablist"
+        >
           <button
             v-for="item in TABS"
             :key="item.id"

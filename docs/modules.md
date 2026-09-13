@@ -26,8 +26,13 @@
 | `DevConsole.vue` | 调试日志浮层 | ~26 |
 | `QuickNav.vue` | 快捷导航：常去 / 推荐 / 历史 | ~158 |
 | `MapSettings.vue` | 「我的」：外观、语言、导航偏好、存储、本机信息 | ~497 |
+| `auth/LoginPage.vue` | 登录 / 登出、展示当前用户（**上图开关**开启时 Tab 入口） | — |
+| `inspection/InspectionListPage.vue` | 巡检任务列表、筛选、进详情 | — |
+| `inspection/InspectionDetailPage.vue` | 巡检详情、备注、选图占位、定位提交 | — |
 
-样式仍集中在 `src/style.css`。
+样式仍集中在 `src/style.css`（含 `.auth-page` / `.inspection-page` 区块）。
+
+**上图开关**：`src/config/featureFlags.js` 的 `SHOW_AUTH_INSPECTION_UI`（env `VITE_SHOW_AUTH_INSPECTION_UI`，默认 `false`）。为 `true` 时 `App.vue` 底部 Tab 额外出现「登录」「巡检」；关闭时界面与三 Tab 行为完全一致。登录/巡检 **不** 写入 `MapSettings`、**不** 绑定 `NavMap` / `QuickNav` 数据流。
 
 ---
 
@@ -65,6 +70,8 @@
 | `src/config.js` | 入口：`TIANDITU_TK`、默认中心/缩放，并 re-export 行为策略 |
 | `src/config/mapDefaults.js` | 地图常量：`DEFAULT_CENTER`、`DEFAULT_ZOOM`、`LOCATED_ZOOM`、`NAV_ZOOM`、`MAX_ZOOM`、瓦片辅助 |
 | `src/config/behaviorPolicy.js` | 到达 / 偏航 / 测速 / 语音 / 会话 / 步行朝向（可热更新） |
+| `src/config/featureFlags.js` | 功能开关：`SHOW_AUTH_INSPECTION_UI`（登录/巡检是否上图） |
+| `src/config/api.js` | `API_BASE`、`API_MODE`（`mock` \| `real`）、REST 路径常量 |
 
 ### 地图默认参数（`config.js` / `mapDefaults.js`）
 
@@ -115,6 +122,7 @@
 | `h5nav:navHistory` | localStorage | `lib/navHistory.js` | 导航历史 |
 | `h5nav:frequentPlaces` | localStorage | `lib/frequentPlaces.js` | 常去地点（≥2 次） |
 | `h5nav:session` | sessionStorage | `lib/navSession.js` | 未完成导航会话 |
+| `h5nav:auth` | localStorage | `lib/auth.js` | 登录 token 与用户快照 |
 
 ### 偏好结构速查
 
@@ -146,6 +154,9 @@
 | `toast.js` | 全局 toast 事件总线 |
 | `appVersion.js` | 生产环境 BUILD-VERSION 轮询与更新提示 |
 | `basemap.js` / `uiTheme.js` / `viewLock.js` / `navPrefs.js` | 底图、主题、视角锁、导航偏好 |
+| `apiClient.js` | `apiRequest()`：拼基址、JSON、可选 Bearer（读 `h5nav:auth`，**不** import `auth.js`） |
+| `auth.js` | 登录 / 登出 / 当前用户 / token 持久化与 `onAuthChange` |
+| `inspection.js` | 巡检任务列表、详情、提交结果（mock 或 real） |
 
 ---
 
@@ -159,8 +170,12 @@ src/
   config/
     behaviorPolicy.js
     mapDefaults.js
+    featureFlags.js
+    api.js
   components/
     nav/                  # 首页地图 UI
+    auth/                 # 登录页（上图开关）
+    inspection/           # 巡检列表/详情（上图开关）
     QuickNav.vue
     MapSettings.vue
     DevConsole.vue
