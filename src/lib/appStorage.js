@@ -13,6 +13,7 @@ import {
   FREQUENT_PLACES_KEY,
   clearFrequentPlaces,
 } from './frequentPlaces.js'
+import { AUTH_KEY, clearAuthStorage } from './auth.js'
 
 export const COORD_KERNEL_KEY = 'h5nav_myboxgl_coord_kernel_v1'
 
@@ -78,6 +79,14 @@ export const STORAGE_CATALOG = Object.freeze([
     scope: 'local',
     kind: 'data',
     labelKey: 'storage.item.history',
+    clearable: true,
+  },
+  {
+    id: 'auth',
+    key: AUTH_KEY,
+    scope: 'local',
+    kind: 'data',
+    labelKey: 'storage.item.auth',
     clearable: true,
   },
   {
@@ -190,6 +199,7 @@ export function clearAppStorageItem(id) {
   else if (item.id === 'navPrefs') setNavPrefs(defaultNavPrefs())
   else if (item.id === 'viewLock') setAutoViewLock(true)
   else if (item.id === 'history') clearNavHistory()
+  else if (item.id === 'auth') clearAuthStorage()
   else if (item.id === 'frequent') clearFrequentPlaces()
   else if (item.id === 'session') clearNavSession()
   else if (item.id === 'coordKernel') {
