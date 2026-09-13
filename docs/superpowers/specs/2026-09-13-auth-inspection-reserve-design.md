@@ -2,54 +2,71 @@
 
 日期：2026-09-13  
 状态：已定稿（待实现）  
-范围：登录 + 设备巡检的可对接骨架（默认 mock、API 预留、**不上实际界面**）
+修订：页面先实现；**配置开关控制是否上图**；**不与现有首页/快捷/我的业务绑定**
 
 ## 目标
 
 1. 实现用户登录领域能力：登录 / 登出 / 当前用户 / token 持久化与变更订阅，默认 mock，可切真实 API。
 2. 实现设备巡检领域能力：任务列表 / 详情 / 提交结果（含定位、照片占位、备注），默认 mock，可切真实 API。
-3. **不改** Tab、「我的」、导航页等实际界面入口；仅 `main` 可做静默 `initAuth()` 恢复本地会话。
+3. **实现独立页面组件**（登录页、巡检列表/详情/提交页），视觉贴合现有蓝白卡片风格。
+4. 用 **功能开关** 控制是否上图（出现在壳层入口）；默认 **关闭**。开启后仅增加独立入口，**不**改导航闸门、不写进「我的」设置项、不与地图/快捷导航数据流绑定。
 
 ## 非目标
 
-- 不做登录页、巡检列表页、拍照 UI、扫码 UI。
-- 不强制导航/地图功能依赖登录（本阶段不上闸）。
+- 不强制首页地图 / 导航依赖登录（本阶段不上闸）。
+- 不把登录态写进 `MapSettings`、不往 `QuickNav` / `NavMap` 塞巡检任务。
+- 不做真实拍照上传 / 扫码（照片仅本地选文件元数据或占位列表）。
 - 不 patch 全局 `fetch`；天地图等第三方请求不绑 Bearer。
-- 不上 Service Worker / OAuth / 短信登录（后续可扩）。
+- 不上 OAuth / 短信登录。
 
 ## 方案
 
-采用「`apiClient` + `auth` / `inspection` 领域模块」（方案 A）。
+「领域模块 + 独立页面 + 上图开关」（在方案 A 上扩展 UI）。
+
+### 0. 上图开关 `src/config/featureFlags.js`
+
+| 项 | 来源 | 默认 | 含义 |
+| --- | --- | --- | --- |
+| `SHOW_AUTH_INSPECTION_UI` | `VITE_SHOW_AUTH_INSPECTION_UI` | `false` | `true` 时在 App 壳层露出独立入口与页面 |
+
+- 解析：`['1','true','yes','on'].includes(String(env).toLowerCase())`
+- `.env.example` 说明；本地默认不上图，需要演示时设 `VITE_SHOW_AUTH_INSPECTION_UI=true`
+
+**上图时的入口（仅此绑定，且与现有三 Tab 业务解耦）：**
+
+- 在 `App.vue` 底部 Tab **额外**出现两项（或一项「业务」下的子页）：`登录`、`巡检`（文案 i18n）。
+- 仅当开关为 true 时 `TABS` 数组包含它们；关闭时与现在完全一致（首页 / 快捷 / 我的）。
+- 导航中（`navigating`）仍只留在首页，行为不变；登录/巡检 Tab 在导航中同样隐藏（沿用现有 tab-bar 规则）。
+
+**不上图时：** 组件文件仍在仓库，可被后续挂载；运行时不 import 进可见树亦可（为减小包体可用动态 `import()`，非必须）。
 
 ### 1. 配置 `src/config/api.js`
 
 | 项 | 来源 | 默认 |
 | --- | --- | --- |
-| `API_BASE` | `import.meta.env.VITE_API_BASE` | `''`（相对同源 `/api`） |
-| `API_MODE` | `import.meta.env.VITE_API_MODE` | `'mock'`（仅 `'mock' \| 'real'`） |
+| `API_BASE` | `import.meta.env.VITE_API_BASE` | `''`（相对同源） |
+| `API_MODE` | `import.meta.env.VITE_API_MODE` | `'mock'`（`'mock' \| 'real'`） |
 
-路径约定（real 模式，可随后端调整常量）：
+路径约定（real）：
 
 | 能力 | Method | Path |
 | --- | --- | --- |
 | 登录 | POST | `/api/auth/login` |
 | 当前用户 | GET | `/api/auth/me` |
-| 登出 | POST | `/api/auth/logout`（可选；本地必清） |
+| 登出 | POST | `/api/auth/logout` |
 | 巡检任务列表 | GET | `/api/inspection/tasks` |
 | 巡检任务详情 | GET | `/api/inspection/tasks/:id` |
 | 提交巡检结果 | POST | `/api/inspection/tasks/:id/submit` |
 
-`.env.example` 增补说明；本地 `.env` 可不改（保持 mock）。
-
 ### 2. `src/lib/apiClient.js`
 
-- `apiRequest(path, { method, body, auth, silent, ... })`：拼 `API_BASE + path`，JSON body，可选 `Authorization: Bearer <token>`（token 来自 `auth.getAccessToken()`）。
-- 底层走现有 `request()`（错误 Toast 策略与业务一致；mock 短路时不发网）。
-- `isMockMode()` 供领域模块分支。
+- `apiRequest(path, { method, body, auth, silent, ... })`：拼基址、JSON、可选 Bearer（`auth.getAccessToken()`）。
+- 底层 `request()`；mock 由领域模块短路，不发网。
+- `isMockMode()`。
 
 ### 3. 登录 `src/lib/auth.js`
 
-**存储：** `h5nav:auth`（localStorage），结构：
+**存储** `h5nav:auth`：
 
 ```json
 {
@@ -60,86 +77,57 @@
 }
 ```
 
-**API：**
-
 | 方法 | 说明 |
 | --- | --- |
-| `initAuth()` | 启动时读本地；real 可选静默 `/me` 校验（失败则清会话）；mock 只恢复本地 |
-| `login({ username, password })` | mock：非空账号即成功；real：POST login |
-| `logout()` | 清本地；real 可尝试 POST logout（失败忽略） |
-| `getAccessToken()` / `getUser()` / `isLoggedIn()` | 同步读 |
-| `onAuthChange(listener)` | 返回取消函数 |
-
-登录失败抛错并用现有 Toast/i18n（`auth.loginFail` 等）。  
-**不上 UI**：不在 `App.vue` / `MapSettings.vue` 增加入口。
+| `initAuth()` | 恢复本地；real 可选静默 `/me` |
+| `login({ username, password })` | mock：非空账号成功 |
+| `logout()` | 清本地；real 尝试 logout |
+| `getAccessToken()` / `getUser()` / `isLoggedIn()` | 同步 |
+| `onAuthChange(listener)` | 取消订阅 |
 
 ### 4. 巡检 `src/lib/inspection.js`
 
-**任务模型（JSDoc）：**
+任务模型：`id, title, assetCode, address, lng, lat, status('pending'|'done'|'cancelled'), dueAt, remark`。
 
-```js
-{
-  id: string,
-  title: string,
-  assetCode: string,      // 设备/箱体编号
-  address: string,
-  lng: number | null,
-  lat: number | null,
-  status: 'pending' | 'done' | 'cancelled',
-  dueAt: string | null,   // ISO
-  remark: string,
-}
-```
-
-**提交载荷：**
-
-```js
-{
-  taskId: string,
-  lng: number | null,
-  lat: number | null,
-  accuracy: number | null,
-  photos: Array<{ id?: string, url?: string, name?: string }>, // 占位，本阶段可不上传二进制
-  remark: string,
-  submittedAt: string, // ISO
-  deviceInfo?: Record<string, string>, // 可选，复用 deviceInfo 摘要
-}
-```
-
-**API：**
+提交：`taskId, lng, lat, accuracy, photos[{id?,url?,name?}], remark, submittedAt, deviceInfo?`。
 
 | 方法 | 说明 |
 | --- | --- |
-| `listInspectionTasks({ status }?)` | mock 返回内置 2～3 条；real GET |
-| `getInspectionTask(id)` | mock 查表；real GET |
-| `submitInspectionResult(payload)` | mock：标记 done 并记结果；real POST |
-| `getLastSubmit(taskId)?` | mock 内存/可选 session 缓存，便于调试 |
+| `listInspectionTasks({ status }?)` | |
+| `getInspectionTask(id)` | |
+| `submitInspectionResult(payload)` | |
+| `getLastSubmit(taskId)?` | mock 调试用 |
 
-未登录时：mock 仍可读写本地演示数据；real 模式请求带 `auth: true`，401 可由调用方处理（本阶段不弹登录页）。
+mock 未登录也可演示；real 请求 `auth: true`。
 
-### 5. 启动与存储登记
+### 5. 页面组件（独立，不塞进 MapSettings / NavMap）
 
-- `main.js`：在现有 init 后调用 `initAuth()`（静默，无 UI）。
-- `appStorage.js`：登记 `h5nav:auth`（kind: `data`，可清；清理时调 `logout`/`clearAuth`）。
-- i18n：`auth.*` / `inspection.*` 错误与通用文案键（三语），供后续界面与 Toast。
+| 文件 | 职责 |
+| --- | --- |
+| `src/components/auth/LoginPage.vue` | 账号、密码、登录/登出、展示当前用户 |
+| `src/components/inspection/InspectionListPage.vue` | 任务列表、状态筛选、进详情 |
+| `src/components/inspection/InspectionDetailPage.vue` | 详情 + 备注 + 选图占位 + 取当前位置提交 |
 
-### 6. 文档
+- 单文件 &lt; 1000 行；样式用现有 CSS 变量 / `style.css` 增补区块（`.auth-page` / `.inspection-page`）。
+- 巡检详情内页可用列表页内 `ref` 切换或简单本地 state，**不引入 vue-router**（与现 App 一致）。
+- 开关关闭时：`App.vue` 不渲染这些页面。
 
-- `docs/modules.md`：新增「预留模块」节，标明未挂 UI。
-- 可选 `docs/superpowers/specs` 本文件即为契约。
+### 6. 启动、存储、i18n、文档
+
+- `main.js`：`initAuth()` 静默恢复（与开关无关）。
+- `appStorage`：登记 `h5nav:auth`，清理走 logout。
+- i18n：`auth.*` / `inspection.*` / Tab 文案（三语）。
+- `docs/modules.md`：预留模块 + **上图开关**说明。
 
 ## 验收
 
-1. `VITE_API_MODE=mock`（默认）下，在 DevTools Console 可：
-   - `await login({ username: 'demo', password: 'x' })` → `isLoggedIn() === true`
-   - `await listInspectionTasks()` → 非空数组
-   - `await submitInspectionResult({...})` → 任务变 `done`
-2. 清存储「登录会话」或 `logout()` 后 `isLoggedIn() === false`。
-3. 界面：首页 / 快捷 / 我的 **无** 新增登录或巡检入口。
+1. 默认（开关 false）：界面仍为三 Tab；无登录/巡检入口；console 仍可调 `login` / `listInspectionTasks`。
+2. `.env` 设 `VITE_SHOW_AUTH_INSPECTION_UI=true` 并重启 dev：出现登录、巡检 Tab；可完成 mock 登录与提交一条巡检。
+3. 开关 true 时：不改「我的」原有区块；地图导航流程无登录拦截。
 4. `npm run build` 通过。
 
 ## 风险与注意
 
-- mock 与 real 响应字段需保持同一归一化函数，避免接真后端时改调用方。
-- token 放 localStorage：内网 H5 可接受；后续若要 HttpOnly Cookie 只改 `apiClient`/`auth`。
-- 照片本阶段仅元数据占位，不做 multipart 上传。
+- Tab 变 5 项时注意小屏宽度：可用缩略标签或两行，保持可点。
+- mock/real 字段归一化，避免接真后端改页面。
+- 照片仅元数据占位，不做 multipart。
