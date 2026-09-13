@@ -218,6 +218,7 @@ export function clearAppDataStorage() {
   clearNavHistory()
   clearFrequentPlaces()
   clearNavSession()
+  clearAuthStorage()
   try {
     getStore('session')?.removeItem(COORD_KERNEL_KEY)
   } catch {

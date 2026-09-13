@@ -7,7 +7,17 @@ function readToken() {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY)
     if (!raw) return ''
-    return JSON.parse(raw)?.accessToken || ''
+    const parsed = JSON.parse(raw)
+    const expiresAt = Number(parsed?.expiresAt)
+    if (Number.isFinite(expiresAt) && expiresAt > 0 && Date.now() >= expiresAt) {
+      try {
+        localStorage.removeItem(AUTH_STORAGE_KEY)
+      } catch {
+        // ignore
+      }
+      return ''
+    }
+    return parsed?.accessToken || ''
   } catch {
     return ''
   }

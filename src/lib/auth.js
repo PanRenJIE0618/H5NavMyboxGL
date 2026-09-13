@@ -5,6 +5,7 @@
 import { API_PATHS } from '../config/api.js'
 import { t } from '../i18n/index.js'
 import { apiRequest, isMockMode } from './apiClient.js'
+import { HttpError } from './http.js'
 
 export const AUTH_KEY = 'h5nav:auth'
 const AUTH_VERSION = 1
@@ -136,9 +137,15 @@ async function refreshFromMe() {
     if (refreshed) {
       cached = refreshed
       saveToStorage(refreshed)
+      notifyListeners()
     }
-  } catch {
-    clearAuthStorage()
+  } catch (err) {
+    const status = err instanceof HttpError ? err.status : 0
+    if (status === 401 || status === 403) {
+      clearAuthStorage()
+    } else {
+      console.warn('[auth] refreshFromMe failed:', err)
+    }
   }
 }
 
