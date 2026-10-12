@@ -4,6 +4,8 @@ import { searchPlaces } from '../../lib/search'
 import {
   clipboardFingerprint,
   extractAddressCandidate,
+  isClipboardPromptingBrowser,
+  isEditingTextField,
   readClipboardTextDetailed,
 } from '../../lib/clipboardAddress'
 import { debugLog } from '../../lib/debugLog'
@@ -43,13 +45,27 @@ ctx.clipboardCheckInFlight = false
 
 ctx.clipboardGestureBound = false
 
-ctx.onClipboardUserGesture = function onClipboardUserGesture() {
+/** iOS 上读剪贴板会弹系统「粘贴」条；仅在回前台时探测一次 */
+ctx.clipboardPromptingBrowser = isClipboardPromptingBrowser()
+
+ctx.onClipboardUserGesture = function onClipboardUserGesture(event) {
+  if (isEditingTextField()) return
+  const target = event?.target
+  if (
+    target &&
+    typeof target.closest === 'function' &&
+    target.closest('input, textarea, select, [contenteditable="true"], button, a')
+  ) {
+    return
+  }
   void ctx.checkClipboardForAddress({ reason: 'gesture' })
 }
 
 ctx.startClipboardWatch = function startClipboardWatch() {
   ctx.stopClipboardWatch()
   if (typeof window === 'undefined') return
+  // iOS：禁止轮询与全局手势读剪贴板，否则输入时反复弹「粘贴」且键盘失效
+  if (ctx.clipboardPromptingBrowser) return
   ctx.clipboardPollTimer = window.setInterval(() => {
     void ctx.checkClipboardForAddress({ reason: 'poll' })
   }, 2500)
@@ -65,17 +81,16 @@ ctx.stopClipboardWatch = function stopClipboardWatch() {
 
 ctx.bindClipboardGestureHook = function bindClipboardGestureHook() {
   if (ctx.clipboardGestureBound || typeof window === 'undefined') return
+  if (ctx.clipboardPromptingBrowser) return
   ctx.clipboardGestureBound = true
-  // Chrome：站点已授权 clipboard-read 时，回到页面点一下通常就能读到
+  // 仅 pointerdown：keydown 会在输入时每敲一字触发读剪贴板
   window.addEventListener('pointerdown', ctx.onClipboardUserGesture, { passive: true })
-  window.addEventListener('keydown', ctx.onClipboardUserGesture, { passive: true })
 }
 
 ctx.unbindClipboardGestureHook = function unbindClipboardGestureHook() {
   if (!ctx.clipboardGestureBound || typeof window === 'undefined') return
   ctx.clipboardGestureBound = false
   window.removeEventListener('pointerdown', ctx.onClipboardUserGesture)
-  window.removeEventListener('keydown', ctx.onClipboardUserGesture)
 }
 
 /**
@@ -87,6 +102,16 @@ ctx.checkClipboardForAddress = async function checkClipboardForAddress(opts = {}
   if (!ctx.props.active || navigating.value || routing.value) return
   if (pendingResume.value) return
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+  if (isEditingTextField()) return
+  // iOS：忽略 focus/gesture/poll，只保留回前台探测，避免粘贴条打断操作
+  if (
+    ctx.clipboardPromptingBrowser &&
+    opts.reason !== 'visible' &&
+    opts.reason !== 'pageshow' &&
+    opts.reason !== 'manual'
+  ) {
+    return
+  }
 
   ctx.clipboardCheckInFlight = true
   try {

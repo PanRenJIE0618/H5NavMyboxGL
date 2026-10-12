@@ -1,13 +1,21 @@
 /**
- * 天地图底图切换（矢量 / 影像 / 地形）
+ * 底图切换（矢量 / 影像 / 地形）
  * 持久化：localStorage `h5nav:basemap`
+ * 瓦片源：天地图 + SuperMap 兜底（微信等环境天地图常被拦）
  */
 
-import { tiandituTileUrls } from '../config.js'
+import {
+  SUPERMAP_CHINA_TILE_URL,
+  TILE_PROVIDER,
+  supermapChinaTileUrls,
+  tiandituTileUrls,
+} from '../config.js'
 
 export const BASEMAP_KEY = 'h5nav:basemap'
+export const TILE_FALLBACK_KEY = 'h5nav:tile-fallback'
 
 /** @typedef {'vec' | 'img' | 'ter'} BasemapId */
+/** @typedef {'tianditu' | 'supermap'} TileProviderId */
 
 /** @type {readonly BasemapId[]} */
 export const BASEMAP_IDS = Object.freeze(['vec', 'img', 'ter'])
@@ -39,6 +47,9 @@ export const BASEMAP_OPTIONS = Object.freeze([
 /** @type {Set<(id: BasemapId) => void>} */
 const listeners = new Set()
 
+/** 会话内是否已切到 SuperMap 兜底 */
+let forceSupermap = false
+
 /**
  * @param {unknown} value
  * @returns {BasemapId}
@@ -65,16 +76,58 @@ export function getStoredBasemap() {
 }
 
 /**
+ * @returns {TileProviderId}
+ */
+export function resolveTileProvider() {
+  if (TILE_PROVIDER === 'supermap' || TILE_PROVIDER === 'tianditu') {
+    return /** @type {TileProviderId} */ (TILE_PROVIDER)
+  }
+  if (forceSupermap) return 'supermap'
+  try {
+    if (sessionStorage.getItem(TILE_FALLBACK_KEY) === '1') return 'supermap'
+  } catch {
+    // ignore
+  }
+  // 微信内置浏览器访问天地图瓦片常被 WAF 拦截（418），默认走 SuperMap
+  if (typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent || '')) {
+    return 'supermap'
+  }
+  return 'tianditu'
+}
+
+export function isUsingSupermapTiles() {
+  return resolveTileProvider() === 'supermap'
+}
+
+/** 标记本会话改用 SuperMap 底图（天地图被拦时） */
+export function enableSupermapTileFallback() {
+  forceSupermap = true
+  try {
+    sessionStorage.setItem(TILE_FALLBACK_KEY, '1')
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * @param {BasemapId} id
- * @returns {{ baseTiles: string[], labelTiles: string[] }}
+ * @returns {{ baseTiles: string[], labelTiles: string[], provider: TileProviderId }}
  */
 export function basemapTileUrls(id) {
+  const provider = resolveTileProvider()
+  if (provider === 'supermap') {
+    const tiles = supermapChinaTileUrls()
+    return { baseTiles: tiles, labelTiles: [], provider }
+  }
   const opt = getBasemapOption(id)
   return {
     baseTiles: tiandituTileUrls(opt.base),
     labelTiles: tiandituTileUrls(opt.labelLayer),
+    provider,
   }
 }
+
+export { SUPERMAP_CHINA_TILE_URL }
 
 /**
  * @param {BasemapId | string} id

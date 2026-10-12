@@ -135,6 +135,31 @@ export function clipboardFingerprint(text) {
     .replace(/\s+/g, ' ')
 }
 
+/** 当前焦点是否在可编辑控件（输入中不应读剪贴板） */
+export function isEditingTextField() {
+  if (typeof document === 'undefined') return false
+  const el = document.activeElement
+  if (!el || el === document.body || el === document.documentElement) return false
+  const tag = el.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (el.isContentEditable) return true
+  return Boolean(el.closest?.('input, textarea, select, [contenteditable="true"]'))
+}
+
+/**
+ * iOS / iPadOS：`clipboard.readText` 会反复弹出「粘贴」授权条，打断输入法与点击。
+ * 含桌面 Safari「请求桌面网站」后的 iPad（MacIntel + touch）。
+ */
+export function isClipboardPromptingBrowser() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  if (/iPhone|iPad|iPod/i.test(ua)) return true
+  if (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1) {
+    return true
+  }
+  return false
+}
+
 /**
  * @returns {Promise<{ text: string | null, error?: string }>}
  */
@@ -147,6 +172,9 @@ export async function readClipboardTextDetailed() {
   }
   if (!navigator.clipboard?.readText) {
     return { text: null, error: 'api-unavailable' }
+  }
+  if (isEditingTextField()) {
+    return { text: null, error: 'editing' }
   }
   try {
     const text = await navigator.clipboard.readText()

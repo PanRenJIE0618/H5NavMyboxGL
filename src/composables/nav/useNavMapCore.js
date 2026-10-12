@@ -6,7 +6,9 @@ import {
 } from '../../config'
 import {
   basemapTileUrls,
+  enableSupermapTileFallback,
   getStoredBasemap,
+  isUsingSupermapTiles,
 } from '../../lib/basemap'
 import { getStoredUiTheme } from '../../lib/uiTheme'
 import { LocationBeacon } from '../../lib/LocationBeacon'
@@ -145,8 +147,63 @@ ctx.applyBasemapToMap = function applyBasemapToMap(id) {
   if (!ctx.map) return
   const { baseTiles, labelTiles } = basemapTileUrls(id)
   ctx.replaceRasterTiles('tdt-vec', baseTiles)
-  ctx.replaceRasterTiles('tdt-cva', labelTiles)
+  if (labelTiles.length) {
+    ctx.replaceRasterTiles('tdt-cva', labelTiles)
+    try {
+      if (ctx.map.getLayer('tdt-cva-layer')) ctx.map.setLayoutProperty('tdt-cva-layer', 'visibility', 'visible')
+    } catch {
+      // ignore
+    }
+  } else {
+    try {
+      if (ctx.map.getLayer('tdt-cva-layer')) ctx.map.setLayoutProperty('tdt-cva-layer', 'visibility', 'none')
+    } catch {
+      // ignore
+    }
+  }
   ctx.applyMapThemeStyle(getStoredUiTheme())
+}
+
+/** 天地图瓦片失败时切 SuperMap，避免微信/部分网络灰屏 */
+ctx.bindBasemapTileFallback = function bindBasemapTileFallback() {
+  if (!ctx.map || ctx.tileFallbackBound) return
+  ctx.tileFallbackBound = true
+  let hits = 0
+  ctx.map.on('error', (event) => {
+    if (isUsingSupermapTiles()) return
+    const src = event?.sourceId || event?.source?.id || ''
+    const status = event?.error?.status || event?.error?.statusCode
+    const msg = String(event?.error?.message || event?.error || '')
+    const looksTile =
+      src === 'tdt-vec' ||
+      src === 'tdt-cva' ||
+      /tianditu|DataServer|418|403|Failed to fetch|AJAXError/i.test(`${src} ${msg} ${status || ''}`)
+    if (!looksTile && status !== 403 && status !== 418) return
+    hits += 1
+    if (hits < 2) return
+    enableSupermapTileFallback()
+    ctx.applyBasemapToMap(getStoredBasemap())
+    ctx.refreshMapSize()
+  })
+}
+
+ctx.waitForMapboxGl = function waitForMapboxGl(timeoutMs = 10000) {
+  if (window.mapboxgl) return Promise.resolve(window.mapboxgl)
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+    const tick = () => {
+      if (window.mapboxgl) {
+        resolve(window.mapboxgl)
+        return
+      }
+      if (Date.now() - started >= timeoutMs) {
+        reject(new Error(t('map.mapboxMissing')))
+        return
+      }
+      window.setTimeout(tick, 50)
+    }
+    tick()
+  })
 }
 
 /** 深色主题：矢量/注记栅格反色，得到暗色电子底图（不影响路线等矢量图层） */
@@ -194,49 +251,97 @@ ctx.applyMapThemeStyle = function applyMapThemeStyle(theme) {
   }
 }
 
+ctx.probeWebGL = function probeWebGL() {
+  try {
+    if (window.mapboxgl?.supported && !window.mapboxgl.supported({ failIfMajorPerformanceCaveat: false })) {
+      return false
+    }
+    const canvas = document.createElement('canvas')
+    const gl =
+      canvas.getContext('webgl') ||
+      canvas.getContext('experimental-webgl')
+    return Boolean(gl)
+  } catch {
+    return false
+  }
+}
+
+/** Mapbox `load` 需等首帧完整绘制；微信/内置浏览器瓦片或 WebGL 异常时可能永不触发 */
+ctx.waitForMapReady = function waitForMapReady(timeoutMs = 8000) {
+  const map = ctx.map
+  if (!map) return Promise.resolve(false)
+  if (map.loaded?.() || map.isStyleLoaded?.()) return Promise.resolve(true)
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (ok) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      map.off?.('load', onLoad)
+      map.off?.('styledata', onStyle)
+      map.off?.('idle', onIdle)
+      resolve(ok)
+    }
+    const onLoad = () => finish(true)
+    const onStyle = () => {
+      if (map.isStyleLoaded?.() || map.loaded?.()) finish(true)
+    }
+    const onIdle = () => finish(true)
+    const timer = setTimeout(() => finish(false), timeoutMs)
+    map.once?.('load', onLoad)
+    map.on?.('styledata', onStyle)
+    map.once?.('idle', onIdle)
+  })
+}
+
 ctx.initMap = async function initMap() {
   try {
     setBootProgress(72, t('boot.map'))
-    const mapboxgl = window.mapboxgl
-    if (!mapboxgl) throw new Error(t('map.mapboxMissing'))
+    const mapboxgl = await ctx.waitForMapboxGl(12000)
     if (!mapEl.value) throw new Error(t('map.containerMissing'))
+    if (!ctx.probeWebGL()) throw new Error(t('map.webglUnsupported'))
 
     const { baseTiles, labelTiles } = basemapTileUrls(getStoredBasemap())
+    const sources = {
+      'tdt-vec': {
+        type: 'raster',
+        tiles: baseTiles,
+        tileSize: 256,
+        maxzoom: MAX_ZOOM,
+      },
+    }
+    const layers = [
+      {
+        id: 'tdt-vec-layer',
+        type: 'raster',
+        source: 'tdt-vec',
+        minzoom: 0,
+        maxzoom: 22,
+      },
+    ]
+    if (labelTiles.length) {
+      sources['tdt-cva'] = {
+        type: 'raster',
+        tiles: labelTiles,
+        tileSize: 256,
+        maxzoom: MAX_ZOOM,
+      }
+      layers.push({
+        id: 'tdt-cva-layer',
+        type: 'raster',
+        source: 'tdt-cva',
+        minzoom: 0,
+        maxzoom: 22,
+      })
+    }
 
     ctx.map = new mapboxgl.Map({
       container: mapEl.value,
       style: {
         version: 8,
-        sources: {
-          'tdt-vec': {
-            type: 'raster',
-            tiles: baseTiles,
-            tileSize: 256,
-            maxzoom: MAX_ZOOM,
-          },
-          'tdt-cva': {
-            type: 'raster',
-            tiles: labelTiles,
-            tileSize: 256,
-            maxzoom: MAX_ZOOM,
-          },
-        },
-        layers: [
-          {
-            id: 'tdt-vec-layer',
-            type: 'raster',
-            source: 'tdt-vec',
-            minzoom: 0,
-            maxzoom: 22,
-          },
-          {
-            id: 'tdt-cva-layer',
-            type: 'raster',
-            source: 'tdt-cva',
-            minzoom: 0,
-            maxzoom: 22,
-          },
-        ],
+        sources,
+        layers,
       },
       center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
       zoom: DEFAULT_ZOOM,
@@ -245,13 +350,15 @@ ctx.initMap = async function initMap() {
       maxZoom: MAX_ZOOM,
       attributionControl: false,
       pitchWithRotate: true,
+      failIfMajorPerformanceCaveat: false,
     })
 
-    // 只等 style load；单张瓦片失败会触发 error，不能据此中断初始化
-    if (!ctx.map.loaded()) {
-      await new Promise((resolve) => {
-        ctx.map.once('load', resolve)
-      })
+    ctx.bindBasemapTileFallback()
+
+    const mapPainted = await ctx.waitForMapReady(8000)
+    if (!mapPainted) {
+      // 样式可能已挂上但首帧未完成：仍继续，避免永久卡在启动遮罩
+      ctx.map.resize?.()
     }
 
     await ctx.waitForStableMapSize()
@@ -277,16 +384,23 @@ ctx.initMap = async function initMap() {
     mapReady.value = true
     ctx.emit('map-ready')
     ctx.applyMapThemeStyle(getStoredUiTheme())
-    ctx.resizeObserver = new ResizeObserver(() => ctx.onMapContainerResize())
-    ctx.resizeObserver.observe(mapEl.value)
+    if (typeof ResizeObserver !== 'undefined' && mapEl.value) {
+      ctx.resizeObserver = new ResizeObserver(() => ctx.onMapContainerResize())
+      ctx.resizeObserver.observe(mapEl.value)
+    }
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', ctx.onMapContainerResize)
     }
     ctx.refreshMapSize()
+    // 微信/iOS：启动屏与地址栏变化后容器尺寸常延迟稳定，多刷几次
+    ;[120, 360, 800, 1600].forEach((ms) => {
+      window.setTimeout(() => ctx.refreshMapSize(), ms)
+    })
     ctx.maybeOfferResumeSession()
     await ctx.locateOnce(true)
   } catch (err) {
     mapError.value = err.message || t('map.mapInitFail')
+    if (ctx.locatingHint) ctx.locatingHint.value = ''
     ctx.emit('map-ready')
   }
 }

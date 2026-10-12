@@ -25,14 +25,14 @@
 | `nav/NavMapChrome.vue` | 测速、剩余进度、出行方式、FAB、遮罩 | ~164 |
 | `DevConsole.vue` | 调试日志浮层 | ~26 |
 | `QuickNav.vue` | 快捷导航：常去 / 推荐 / 历史 | ~158 |
-| `MapSettings.vue` | 「我的」：外观、语言、导航偏好、存储、本机信息 | ~497 |
-| `auth/LoginPage.vue` | 登录 / 登出、展示当前用户（**上图开关**开启时 Tab 入口） | — |
+| `MapSettings.vue` | 「我的」：账号信息（上图且已登录）/ 去登录入口、外观与系统设置 | — |
+| `auth/LoginPage.vue` | **独立登录页**（启动默认 / 从「我的」打开） | — |
 | `inspection/InspectionListPage.vue` | 巡检任务列表、筛选、进详情 | — |
 | `inspection/InspectionDetailPage.vue` | 巡检详情、备注、选图占位、定位提交 | — |
 
 样式仍集中在 `src/style.css`（含 `.auth-page` / `.inspection-page` 区块）。
 
-**上图开关**：`src/config/featureFlags.js` 的 `SHOW_AUTH_INSPECTION_UI`（env `VITE_SHOW_AUTH_INSPECTION_UI`，默认 `false`）。为 `true` 时 `App.vue` 底部 Tab 额外出现「登录」「巡检」；关闭时界面与三 Tab 行为完全一致。登录/巡检 **不** 写入 `MapSettings`、**不** 绑定 `NavMap` / `QuickNav` 数据流。
+**上图开关**：`SHOW_AUTH_INSPECTION_UI`（默认 `false`）。为 `true` 时：未登录启动进入**独立登录页**（可「稍后再说」进首页）；「我的」只展示登录后用户信息 + 设置（未登录显示「去登录」）；底栏可多「巡检」Tab，**无**登录 Tab。不绑定 `NavMap` / `QuickNav` 数据流。
 
 ---
 

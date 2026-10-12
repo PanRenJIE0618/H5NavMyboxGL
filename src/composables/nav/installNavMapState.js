@@ -36,7 +36,7 @@ ctx.mapError = ref('')
 
 ctx.address = ref('')
 
-ctx.locatingHint = ref(t('hint.locating'))
+ctx.locatingHint = ref('')
 
 ctx.keyword = ref('')
 

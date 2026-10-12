@@ -6,6 +6,20 @@ export const TIANDITU_BASE_LAYER = 'vec_w'
 /** 矢量注记 */
 export const TIANDITU_LABEL_LAYER = 'cva_w'
 
+/**
+ * 底图提供方：
+ * - auto：优先天地图，瓦片失败则切 SuperMap（微信/部分网络天地图常 403/418）
+ * - supermap：固定 SuperMap 中国底图
+ * - tianditu：固定天地图
+ */
+export const TILE_PROVIDER = String(import.meta.env.VITE_TILE_PROVIDER || 'auto')
+  .trim()
+  .toLowerCase()
+
+/** SuperMap 在线中国底图（EPSG:3857），作天地图不可用时的兜底 */
+export const SUPERMAP_CHINA_TILE_URL =
+  'https://iserver.supermap.io/iserver/services/map-china400/rest/maps/China/zxyTileImage.png?z={z}&x={x}&y={y}'
+
 const SUBDOMAINS = [0, 1, 2, 3, 4, 5, 6, 7]
 
 export function tiandituTileUrls(layerType, tk = TIANDITU_TK) {
@@ -13,6 +27,10 @@ export function tiandituTileUrls(layerType, tk = TIANDITU_TK) {
     (n) =>
       `https://t${n}.tianditu.gov.cn/DataServer?T=${layerType}&x={x}&y={y}&l={z}&tk=${tk}`,
   )
+}
+
+export function supermapChinaTileUrls() {
+  return [SUPERMAP_CHINA_TILE_URL]
 }
 
 export const DEFAULT_CENTER = { lng: 116.40969, lat: 39.89945 }

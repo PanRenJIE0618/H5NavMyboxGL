@@ -14,7 +14,14 @@ export default {
   'auth.logout': 'Sign out',
   'auth.loggedInAs': 'Signed in as {name}',
   'auth.loginFail': 'Sign-in failed. Check username and password.',
+  'auth.logoutFail': 'Sign-out failed. Please try again.',
   'auth.needUsername': 'Enter a username',
+  'auth.loginHint': 'Sign in to use inspection and related features.',
+  'auth.accountHint': 'Your session is stored on this device. Sign out anytime.',
+  'auth.needLoginHint': 'Sign in to see your account here.',
+  'auth.account': 'Account',
+  'auth.goLogin': 'Sign in',
+  'auth.skipLater': 'Not now',
 
   'inspection.title': 'Equipment inspection',
   'inspection.empty': 'No inspection tasks',
@@ -262,6 +269,8 @@ export default {
   'map.invalidDest': 'Invalid destination coordinates',
   'map.noWalkRoute': 'No walking route found',
   'map.mapboxMissing': 'Mapbox GL failed to load',
+  'map.webglUnsupported':
+    'WebGL is unavailable in this browser, so the map cannot render. Open in the system browser, Chrome, or Safari.',
   'map.containerMissing': 'Map container not ready',
   'map.clipboardCoord': 'Clipboard coordinates',
   'cardinal.n': 'N',

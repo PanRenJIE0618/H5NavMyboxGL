@@ -1,12 +1,12 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 import { locale, t } from '../../i18n'
-import { getUser, isLoggedIn, login, logout, onAuthChange } from '../../lib/auth.js'
+import { login } from '../../lib/auth.js'
+
+const emit = defineEmits(['success', 'skip'])
 
 const username = ref('')
 const password = ref('')
-const loggedIn = ref(isLoggedIn())
-const user = ref(getUser())
 const busy = ref(false)
 const error = ref('')
 
@@ -15,26 +15,13 @@ function tx(key, params) {
   return t(key, params)
 }
 
-function applyAuth(state) {
-  loggedIn.value = Boolean(state?.isLoggedIn)
-  user.value = state?.user ?? null
-}
-
-let unsubscribe = () => {}
-
-onMounted(() => {
-  applyAuth({ user: getUser(), isLoggedIn: isLoggedIn() })
-  unsubscribe = onAuthChange(applyAuth)
-})
-
-onUnmounted(() => unsubscribe())
-
 async function onLogin() {
   error.value = ''
   busy.value = true
   try {
     await login({ username: username.value, password: password.value })
     password.value = ''
+    emit('success')
   } catch (cause) {
     error.value = cause instanceof Error && cause.message ? cause.message : t('auth.loginFail')
   } finally {
@@ -42,43 +29,21 @@ async function onLogin() {
   }
 }
 
-async function onLogout() {
-  error.value = ''
-  busy.value = true
-  try {
-    await logout()
-  } catch (cause) {
-    error.value = cause instanceof Error && cause.message ? cause.message : t('auth.loginFail')
-  } finally {
-    busy.value = false
-  }
+function onSkip() {
+  emit('skip')
 }
 </script>
 
 <template>
-  <div class="auth-page" role="region" :aria-labelledby="loggedIn ? 'auth-user-title' : 'auth-title'">
+  <div class="auth-page" role="region" aria-labelledby="auth-title">
     <header class="auth-page__bar">
-      <h1 :id="loggedIn ? 'auth-user-title' : 'auth-title'" class="auth-page__title">
-        {{ tx('auth.title') }}
-      </h1>
+      <h1 id="auth-title" class="auth-page__title">{{ tx('auth.title') }}</h1>
     </header>
 
     <div class="auth-page__body">
-      <section v-if="loggedIn" class="auth-page__card auth-page__card--session">
-        <p class="auth-page__status" role="status">
-          {{ tx('auth.loggedInAs', { name: user?.name || '' }) }}
-        </p>
-        <button
-          class="auth-page__btn auth-page__btn--ghost"
-          type="button"
-          :disabled="busy"
-          @click="onLogout"
-        >
-          {{ tx('auth.logout') }}
-        </button>
-      </section>
+      <p class="auth-page__lead">{{ tx('auth.loginHint') }}</p>
 
-      <form v-else class="auth-page__card" @submit.prevent="onLogin">
+      <form class="auth-page__card" @submit.prevent="onLogin">
         <label class="auth-page__field">
           <span>{{ tx('auth.username') }}</span>
           <input
@@ -103,6 +68,14 @@ async function onLogout() {
         <p v-if="error" class="auth-page__error" role="alert">{{ error }}</p>
         <button class="auth-page__btn" type="submit" :disabled="busy">
           {{ tx('auth.login') }}
+        </button>
+        <button
+          class="auth-page__btn auth-page__btn--ghost"
+          type="button"
+          :disabled="busy"
+          @click="onSkip"
+        >
+          {{ tx('auth.skipLater') }}
         </button>
       </form>
     </div>

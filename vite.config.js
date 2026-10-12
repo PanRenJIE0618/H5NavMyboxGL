@@ -50,11 +50,13 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    strictPort: true,
+    // 5173 被占用时自动顺延（例如其它项目的 Vite）
+    strictPort: false,
     open: true,
   },
   preview: {
     host: true,
     port: 5173,
+    strictPort: false,
   },
 })

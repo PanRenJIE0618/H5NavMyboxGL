@@ -43,16 +43,21 @@ export async function request(url, options = {}) {
   }
 
   const ctrl = new AbortController()
-  const onAbort = () => ctrl.abort(outerSignal?.reason)
+  // iOS Safari / 微信：abort(reason) 较晚才支持，统一无参 abort 避免启动期抛错
+  const safeAbort = () => {
+    try {
+      ctrl.abort()
+    } catch {
+      // ignore
+    }
+  }
+  const onAbort = () => safeAbort()
   if (outerSignal) {
-    if (outerSignal.aborted) ctrl.abort(outerSignal.reason)
+    if (outerSignal.aborted) safeAbort()
     else outerSignal.addEventListener('abort', onAbort, { once: true })
   }
 
-  const timer =
-    timeout > 0
-      ? setTimeout(() => ctrl.abort(new DOMException('Timeout', 'AbortError')), timeout)
-      : null
+  const timer = timeout > 0 ? setTimeout(safeAbort, timeout) : null
 
   try {
     const res = await fetch(url, { ...init, signal: ctrl.signal })

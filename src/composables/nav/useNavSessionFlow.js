@@ -705,7 +705,7 @@ watch(
         ctx.refreshMapSize()
       })
     }
-    void ctx.checkClipboardForAddress()
+    void ctx.checkClipboardForAddress({ reason: 'visible' })
     ctx.startClipboardWatch()
   },
 )
@@ -731,7 +731,7 @@ onMounted(() => {
   })
   ctx.initMap()
   requestAnimationFrame(() => ctx.bindOverlayObservers())
-  void ctx.checkClipboardForAddress()
+  void ctx.checkClipboardForAddress({ reason: 'visible' })
   ctx.startClipboardWatch()
 })
 

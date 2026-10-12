@@ -99,6 +99,7 @@ summary {
   display: block;
   width: 100%;
   height: 100%;
+  min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
   background: var(--page-bg);
@@ -109,7 +110,7 @@ summary {
   top: calc(10px + env(safe-area-inset-top, 0px));
   left: 12px;
   right: 12px;
-  z-index: 30;
+  z-index: 40;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -791,7 +792,7 @@ html[data-theme='contrast'] .hud {
 .veil {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: 20;
   display: grid;
   place-content: center;
   justify-items: center;
@@ -1597,6 +1598,288 @@ html[data-theme='dark'] .resume-banner__body strong {
   gap: 18px;
 }
 
+/* —— 系统设置式「我的」 —— */
+.settings-page--ios .settings-page__body.stg-body {
+  gap: 8px;
+  padding-top: 10px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.stg-caption {
+  margin: 14px 4px 6px;
+  padding: 0 12px;
+  color: var(--mist);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.stg-caption:first-child {
+  margin-top: 4px;
+}
+
+.stg-group {
+  margin: 0;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.stg-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 12px;
+}
+
+.stg-profile--device {
+  border-bottom: 0;
+}
+
+.stg-profile__avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.stg-profile__avatar--device {
+  border-radius: 12px;
+}
+
+.stg-profile__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stg-profile__copy strong {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.stg-profile__copy span,
+.stg-profile__copy small {
+  color: var(--mist);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.stg-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.stg-group > .stg-row:first-child,
+.stg-group > .stg-profile + .stg-row {
+  border-top: 1px solid var(--line);
+}
+
+.stg-group > .stg-profile:first-child + .stg-error + .stg-row,
+.stg-group > *:first-child.stg-row {
+  border-top: 0;
+}
+
+.stg-row--static {
+  cursor: default;
+}
+
+.stg-row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.stg-row__line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.stg-row__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stg-row__main strong {
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.stg-row__main small {
+  color: var(--mist);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.stg-row.is-on .settings-switch__track {
+  background: var(--navy);
+}
+
+.stg-row.is-on .settings-switch__thumb {
+  transform: translateX(18px);
+}
+
+.stg-row.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.stg-row--danger .stg-row__main strong {
+  color: var(--danger);
+  text-align: center;
+  width: 100%;
+}
+
+.stg-row--danger {
+  justify-content: center;
+}
+
+.stg-row--split {
+  justify-content: space-between;
+}
+
+.stg-value {
+  flex: 0 0 auto;
+  max-width: 46%;
+  color: var(--mist);
+  font-size: 14px;
+  text-align: right;
+}
+
+.stg-value--wrap {
+  max-width: 58%;
+  word-break: break-all;
+  font-size: 13px;
+}
+
+.stg-chevron {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--mist);
+  border-bottom: 2px solid var(--mist);
+  transform: rotate(-45deg);
+  opacity: 0.55;
+  transition: transform 0.18s ease;
+}
+
+.stg-chevron.is-open {
+  transform: rotate(45deg);
+}
+
+.stg-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stg-icon--navy { background: #3370ff; }
+.stg-icon--teal { background: #0f9f8a; }
+.stg-icon--violet { background: #2563eb; }
+.stg-icon--green { background: #34a853; }
+.stg-icon--blue { background: #3b82f6; }
+.stg-icon--orange { background: #f59e0b; }
+.stg-icon--cyan { background: #0891b2; }
+.stg-icon--indigo { background: #1d4ed8; }
+.stg-icon--gray { background: #64748b; }
+
+.stg-seg {
+  width: 100%;
+}
+
+.stg-tiles {
+  width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.stg-tiles .mine-tile {
+  padding: 10px 8px;
+}
+
+.stg-tiles .mine-tile small {
+  display: none;
+}
+
+.stg-link {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 550;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.stg-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.stg-flash {
+  margin: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--navy);
+  font-size: 13px;
+}
+
+.stg-error {
+  margin: 0;
+  padding: 0 14px 10px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+html[data-theme='dark'] .stg-group {
+  background: var(--panel);
+}
+
+html[data-theme='contrast'] .stg-group {
+  border-color: #000;
+  border-width: 2px;
+}
+
+html[data-theme='contrast'] .stg-icon--violet,
+html[data-theme='contrast'] .stg-icon--indigo {
+  background: #0047ff;
+}
+
 .mine-hero {
   display: flex;
   align-items: center;
@@ -2243,6 +2526,7 @@ html[data-theme='dark'] .mine-action--danger {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
   background: transparent;
@@ -2262,6 +2546,8 @@ html[data-theme='dark'] .mine-action--danger {
 
 .app-shell.is-booting .app-page--map .veil {
   opacity: 0;
+  /* 启动期隐藏遮罩时仍会盖住整层 map-shell，必须放开点击，否则「日志」等按钮无响应 */
+  pointer-events: none;
 }
 
 .app-shell__main {
@@ -2853,6 +3139,73 @@ html[data-theme='dark'] .quick-card__go {
   background: var(--page-bg);
   color: var(--ink);
   will-change: transform, opacity;
+}
+
+.auth-page.is-embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  overflow: visible;
+  background: transparent;
+  will-change: auto;
+}
+
+.auth-page.is-embedded .auth-page__body {
+  padding: 0;
+  padding-bottom: 0;
+}
+
+.auth-page.is-embedded .auth-page__embed-head {
+  margin-bottom: 10px;
+}
+
+.auth-page.is-embedded .auth-page__card {
+  margin: 0;
+}
+
+.auth-page__lead {
+  margin: 0 0 12px;
+  color: var(--mist);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mine-card--account {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mine-account__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mine-account__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.mine-account__btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.mine-account__btn--ghost {
+  background: transparent;
+  color: var(--navy);
+  border: 1px solid var(--line);
+}
+
+.mine-account__btn:disabled {
+  opacity: 0.55;
 }
 
 .auth-page__bar,
