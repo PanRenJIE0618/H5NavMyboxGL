@@ -1486,61 +1486,197 @@ html[data-theme='dark'] .resume-banner__body strong {
 
 .dev-console {
   position: fixed;
-  left: 8px;
-  right: 8px;
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  z-index: 10000;
-  pointer-events: none;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+.dev-console__scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: rgba(8, 14, 22, 0.45);
+  cursor: pointer;
+}
+
+.dev-console__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: min(62vh, 520px);
+  margin: 0 10px calc(10px + env(safe-area-inset-bottom, 0px) + var(--tab-clearance, 0px));
+  overflow: hidden;
+  border: 1px solid rgba(127, 227, 224, 0.28);
+  border-radius: 16px;
+  background: rgba(8, 18, 28, 0.96);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 .dev-console__bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  pointer-events: auto;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 12px 12px 8px;
 }
 
-.dev-console__clear {
+.dev-console__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dev-console__heading strong {
+  color: #e8f7f6;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dev-console__count {
+  color: #8fa3ad;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.dev-console__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.dev-console__btn {
   height: 32px;
-  padding: 0 12px;
-  border: 1px solid rgba(127, 227, 224, 0.45);
-  background: rgba(10, 32, 48, 0.92);
-  color: var(--cyan);
+  padding: 0 10px;
+  border: 1px solid rgba(127, 227, 224, 0.35);
+  border-radius: 999px;
+  background: rgba(16, 36, 52, 0.95);
+  color: #7fe3e0;
   font-family: var(--sans);
   font-size: 12px;
+  line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
-.dev-console__hint {
-  font-size: 11px;
-  color: #8fa3ad;
+.dev-console__btn--close {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #d7e4ea;
+}
+
+.dev-console__toast {
+  margin: 0 12px 6px;
+  color: #9dffb8;
+  font-size: 12px;
 }
 
 .dev-console__list {
-  pointer-events: auto;
-  margin-top: 6px;
-  max-height: 36vh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  padding: 8px;
-  border: 1px solid rgba(127, 227, 224, 0.3);
-  background: rgba(6, 18, 28, 0.94);
+  padding: 4px 10px 12px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
-.dev-console__list pre {
+.dev-console__item {
   margin: 0 0 6px;
-  white-space: pre-wrap;
-  word-break: break-all;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.dev-console__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.dev-console__row.is-static {
+  cursor: default;
+}
+
+.dev-console__time {
+  flex: 0 0 auto;
+  color: #7fe3e0;
   font-family: var(--mono);
   font-size: 11px;
-  line-height: 1.35;
-  color: #b7f5c8;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.dev-console__title {
+  color: #d8f5d0;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.dev-console__caret {
+  color: #8fa3ad;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dev-console__detail {
+  margin: 0;
+  padding: 0 10px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: #a8d4c8;
 }
 
 .dev-console__empty {
-  margin: 0;
-  font-size: 12px;
+  margin: 18px 8px;
+  text-align: center;
+  font-size: 13px;
   color: #8fa3ad;
+}
+
+.dev-console-enter-active,
+.dev-console-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.dev-console-enter-active .dev-console__panel,
+.dev-console-leave-active .dev-console__panel {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dev-console-enter-from,
+.dev-console-leave-to {
+  opacity: 0;
+}
+
+.dev-console-enter-from .dev-console__panel,
+.dev-console-leave-to .dev-console__panel {
+  transform: translate3d(0, 18%, 0);
 }
 
 /* —— 地图设置页 —— */

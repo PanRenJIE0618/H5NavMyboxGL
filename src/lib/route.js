@@ -1,3 +1,4 @@
+import { tiandituApiUrl } from '../config.js'
 import { haversineMeters } from './geo.js'
 import { request } from './http.js'
 import { t } from '../i18n/index.js'
@@ -80,7 +81,9 @@ async function planWithHttp(start, end, tk, style) {
     dest: `${end.lng},${end.lat}`,
     style: String(style),
   })
-  const url = `https://api.tianditu.gov.cn/drive?postStr=${encodeURIComponent(postStr)}&type=search&tk=${encodeURIComponent(tk)}`
+  const url = tiandituApiUrl(
+    `drive?postStr=${encodeURIComponent(postStr)}&type=search&tk=${encodeURIComponent(tk)}`,
+  )
   const text = await request(url, { parse: 'text', timeout: 20000 })
   const parsed = parseDriveBody(text, style)
   if (!parsed?.path?.length) throw new Error('没有找到驾车路线')

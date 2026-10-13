@@ -7,12 +7,22 @@
 import {
   SUPERMAP_CHINA_TILE_URL,
   TILE_PROVIDER,
+  USE_TIANDITU_PROXY,
   supermapChinaTileUrls,
   tiandituTileUrls,
 } from '../config.js'
 
 export const BASEMAP_KEY = 'h5nav:basemap'
 export const TILE_FALLBACK_KEY = 'h5nav:tile-fallback'
+
+// 启用同源代理后，清掉此前「微信强制 SuperMap」的会话标记，重新走天地图
+if (USE_TIANDITU_PROXY && typeof sessionStorage !== 'undefined') {
+  try {
+    sessionStorage.removeItem(TILE_FALLBACK_KEY)
+  } catch {
+    // ignore
+  }
+}
 
 /** @typedef {'vec' | 'img' | 'ter'} BasemapId */
 /** @typedef {'tianditu' | 'supermap'} TileProviderId */
@@ -88,10 +98,7 @@ export function resolveTileProvider() {
   } catch {
     // ignore
   }
-  // 微信内置浏览器访问天地图瓦片常被 WAF 拦截（418），默认走 SuperMap
-  if (typeof navigator !== 'undefined' && /MicroMessenger/i.test(navigator.userAgent || '')) {
-    return 'supermap'
-  }
+  // 微信等环境通过同源代理访问天地图，不再强制切 SuperMap
   return 'tianditu'
 }
 

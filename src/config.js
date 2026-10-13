@@ -1,3 +1,8 @@
+function envFlag(value, fallback = false) {
+  if (value == null || value === '') return fallback
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase())
+}
+
 export const TIANDITU_TK =
   import.meta.env.VITE_TIANDITU_TK || '01351bc3b46456a67a34f45c5a62c76d'
 
@@ -7,8 +12,15 @@ export const TIANDITU_BASE_LAYER = 'vec_w'
 export const TIANDITU_LABEL_LAYER = 'cva_w'
 
 /**
+ * 是否经本站同源代理访问天地图（默认开）。
+ * 微信等内置浏览器常拦截/WAF 直连 tianditu.gov.cn，同源代理可恢复瓦片与 API。
+ * 关闭：VITE_TIANDITU_PROXY=false
+ */
+export const USE_TIANDITU_PROXY = envFlag(import.meta.env.VITE_TIANDITU_PROXY, true)
+
+/**
  * 底图提供方：
- * - auto：优先天地图，瓦片失败则切 SuperMap（微信/部分网络天地图常 403/418）
+ * - auto：优先天地图，瓦片失败则切 SuperMap
  * - supermap：固定 SuperMap 中国底图
  * - tianditu：固定天地图
  */
@@ -22,11 +34,20 @@ export const SUPERMAP_CHINA_TILE_URL =
 
 const SUBDOMAINS = [0, 1, 2, 3, 4, 5, 6, 7]
 
+/** 瓦片：同源 `/proxy/tianditu/t{n}/...` 或直连官方域名 */
 export function tiandituTileUrls(layerType, tk = TIANDITU_TK) {
-  return SUBDOMAINS.map(
-    (n) =>
-      `https://t${n}.tianditu.gov.cn/DataServer?T=${layerType}&x={x}&y={y}&l={z}&tk=${tk}`,
+  return SUBDOMAINS.map((n) =>
+    USE_TIANDITU_PROXY
+      ? `/proxy/tianditu/t${n}/DataServer?T=${layerType}&x={x}&y={y}&l={z}&tk=${tk}`
+      : `https://t${n}.tianditu.gov.cn/DataServer?T=${layerType}&x={x}&y={y}&l={z}&tk=${tk}`,
   )
+}
+
+/** 检索 / 地理编码 / 驾车：同源 `/proxy/tianditu/api/...` 或直连 */
+export function tiandituApiUrl(pathAndQuery) {
+  const path = String(pathAndQuery || '').replace(/^\//, '')
+  if (USE_TIANDITU_PROXY) return `/proxy/tianditu/api/${path}`
+  return `https://api.tianditu.gov.cn/${path}`
 }
 
 export function supermapChinaTileUrls() {

@@ -1,4 +1,5 @@
 import { TIANDITU_TK } from '../../config'
+import { ENABLE_CLIPBOARD_AUTO } from '../../config/featureFlags'
 import { unlockNavVoice } from '../../lib/navVoice'
 import { searchPlaces } from '../../lib/search'
 import {
@@ -64,6 +65,7 @@ ctx.onClipboardUserGesture = function onClipboardUserGesture(event) {
 ctx.startClipboardWatch = function startClipboardWatch() {
   ctx.stopClipboardWatch()
   if (typeof window === 'undefined') return
+  if (!ENABLE_CLIPBOARD_AUTO) return
   // iOS：禁止轮询与全局手势读剪贴板，否则输入时反复弹「粘贴」且键盘失效
   if (ctx.clipboardPromptingBrowser) return
   ctx.clipboardPollTimer = window.setInterval(() => {
@@ -98,6 +100,7 @@ ctx.unbindClipboardGestureHook = function unbindClipboardGestureHook() {
  * @param {{ reason?: string }} [opts]
  */
 ctx.checkClipboardForAddress = async function checkClipboardForAddress(opts = {}) {
+  if (!ENABLE_CLIPBOARD_AUTO && opts.reason !== 'manual') return
   if (ctx.clipboardCheckInFlight) return
   if (!ctx.props.active || navigating.value || routing.value) return
   if (pendingResume.value) return

@@ -1,3 +1,4 @@
+import { tiandituApiUrl } from '../config.js'
 import { request } from './http.js'
 
 export async function searchPlaces(keyword, around, tk) {
@@ -51,7 +52,9 @@ async function httpNearbySearch(text, around, tk) {
 }
 
 async function fetchSearch(postStr, tk) {
-  const url = `https://api.tianditu.gov.cn/v2/search?postStr=${encodeURIComponent(JSON.stringify(postStr))}&type=query&tk=${tk}`
+  const url = tiandituApiUrl(
+    `v2/search?postStr=${encodeURIComponent(JSON.stringify(postStr))}&type=query&tk=${tk}`,
+  )
   try {
     const data = await request(url, { parse: 'json', silent: true, timeout: 12000 })
     return normalizeSearchResult(data)
@@ -63,7 +66,9 @@ async function fetchSearch(postStr, tk) {
 async function httpGeocode(text, tk) {
   if (!tk) return []
   try {
-    const url = `https://api.tianditu.gov.cn/geocoder?ds=${encodeURIComponent(JSON.stringify({ keyWord: text }))}&tk=${tk}`
+    const url = tiandituApiUrl(
+      `geocoder?ds=${encodeURIComponent(JSON.stringify({ keyWord: text }))}&tk=${tk}`,
+    )
     const data = await request(url, { parse: 'json', silent: true, timeout: 12000 })
     const loc = data.location || data.result?.location
     const parsed = toPlace({

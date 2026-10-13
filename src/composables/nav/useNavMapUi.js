@@ -14,7 +14,7 @@ import {
   driveStyleLabel,
   travelModeLabel,
 } from '../../lib/route'
-import { debugConsoleOpen } from '../../lib/debugLog'
+import { toggleDebugConsole } from '../../lib/debugLog'
 import {
   t,
   locale,
@@ -53,8 +53,8 @@ export function installNavMapUi(ctx) {
     watching,
   } = ctx
 
-ctx.toggleDebugConsole = function toggleDebugConsole() {
-  debugConsoleOpen.value = !debugConsoleOpen.value
+ctx.toggleDebugConsole = function toggleDebugConsoleFn() {
+  toggleDebugConsole()
 }
 
 ctx.travelModeBtnLabel = function travelModeBtnLabel(id) {
